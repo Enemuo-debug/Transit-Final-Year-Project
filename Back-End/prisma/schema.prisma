@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VehicleStatus {
+  IDLE
+  IN_TRANSIT
+  EMERGENCY
+  MAINTENANCE
+}
+
+enum JourneyStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  DISPATCHED
+  OFFLINE
+}
+
+enum IncidentStatus {
+  REPORTED
+  DISPATCHED
+  RESOLVED
+}
+
+model Company {
+  companyId    String   @id @default(uuid())
+  companyName  String
+  contactEmail String   @unique
+
+  routes Route[]
+  buses  Bus[]
+}
+
+model Stop {
+  stopId    String @id @default(uuid())
+  stopName  String
+  latitude  Float
+  longitude Float
+
+  originRoutes      Route[]     @relation("OriginStop")
+  destinationRoutes Route[]     @relation("DestinationStop")
+  routeStops        RouteStop[]
+}
+
+model Route {
+  routeId           String @id @default(uuid())
+  companyId         String
+  routeName         String
+  originStopId      String
+  destinationStopId String
+
+  company         Company     @relation(fields: [companyId], references: [companyId])
+  originStop      Stop        @relation("OriginStop", fields: [originStopId], references: [stopId])
+  destinationStop Stop        @relation("DestinationStop", fields: [destinationStopId], references: [stopId])
+  routeStops      RouteStop[]
+  journeys        Journey[]
+}
+
+model RouteStop {
+  routeId   String
+  stopId    String
+  stopOrder Int
+
+  route Route @relation(fields: [routeId], references: [routeId])
+  stop  Stop  @relation(fields: [stopId], references: [stopId])
+
+  @@id([routeId, stopId])
+}
+
+model Bus {
+  busId       String        @id @default(uuid())
+  companyId   String
+  plateNumber String        @unique
+  capacity    Int
+  status      VehicleStatus @default(IDLE)
+
+  company  Company   @relation(fields: [companyId], references: [companyId])
+  journeys Journey[]
+}
+
+model Journey {
+  journeyId      String        @id @default(uuid())
+  busId          String
+  routeId        String
+  scheduledStart DateTime
+  actualStart    DateTime?
+  currentStatus  JourneyStatus @default(SCHEDULED)
+
+  bus       Bus        @relation(fields: [busId], references: [busId])
+  route     Route      @relation(fields: [routeId], references: [routeId])
+  incidents Incident[]
+}
+
+model Location {
+  locationId String @id @default(uuid())
+  address    String
+  latitude   Float
+  longitude  Float
+
+  responderLocations ResponderLocation[]
+}
+
+model EmergencyResponder {
+  responderId       String @id @default(uuid())
+  organizationName  String
+  type              String // e.g., FRSC, Police, Ambulance
+  headquartersEmail String @unique
+
+  responderLocations ResponderLocation[]
+}
+
+model ResponderLocation {
+  responderLocationId String             @id @default(uuid())
+  responderId         String
+  locationId          String
+  branchName          String
+  contactPhone        String
+  availabilityStatus  AvailabilityStatus @default(AVAILABLE)
+
+  responder  EmergencyResponder @relation(fields: [responderId], references: [responderId])
+  location   Location           @relation(fields: [locationId], references: [locationId])
+  dispatches IncidentDispatch[]
+}
+
+model Incident {
+  incidentId       String         @id @default(uuid())
+  journeyId        String
+  type             String
+  severity         String
+  incidentLocation String
+  timestamp        DateTime       @default(now())
+  status           IncidentStatus @default(REPORTED)
+
+  journey    Journey            @relation(fields: [journeyId], references: [journeyId])
+  dispatches IncidentDispatch[]
+}
+
+model IncidentDispatch {
+  dispatchId          String    @id @default(uuid())
+  incidentId          String
+  responderLocationId String
+  dispatchedAt        DateTime  @default(now())
+  arrivedAt           DateTime?
+
+  incident          Incident          @relation(fields: [incidentId], references: [incidentId])
+  responderLocation ResponderLocation @relation(fields: [responderLocationId], references: [responderLocationId])
+}
