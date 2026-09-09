@@ -2,16 +2,16 @@ import { Link } from 'react-router-dom';
 
 const NAV = [
   { to: '/', icon: 'home', label: 'Home' },
+  { to: '/signin', icon: 'login', label: 'Sign In' },
   { to: '/signup/organization', icon: 'dashboard_customize', label: 'Command' },
   { to: '/signup/responder', icon: 'biotech', label: 'Telemetry' },
-  { to: '/signup/organization', icon: 'inventory', label: 'Assets' },
 ] as const;
 
 const BOTTOM_NAV = [
   { to: '/', icon: 'home', label: 'Home' },
+  { to: '/signin', icon: 'login', label: 'Sign In' },
   { to: '/signup/organization', icon: 'grid_view', label: 'Command' },
   { to: '/signup/responder', icon: 'sensors', label: 'Live' },
-  { to: '/signup/organization', icon: 'local_shipping', label: 'Assets' },
 ] as const;
 
 const TECH_IMAGE =

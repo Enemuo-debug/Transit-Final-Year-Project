@@ -12,7 +12,7 @@ export function OrgDashboard() {
   const { positions, connected } = useLivePositions();
 
   if (!session || session.role !== 'COMPANY') {
-    return <Navigate to="/signup/organization" replace />;
+    return <Navigate to="/signin/organization" replace />;
   }
 
   const company = session.user as { id?: number; email?: string; company_name?: string };

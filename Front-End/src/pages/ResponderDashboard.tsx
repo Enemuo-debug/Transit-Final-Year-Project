@@ -7,7 +7,7 @@ export function ResponderDashboard() {
   const session = getSession();
 
   if (!session || session.role !== 'RESPONDER') {
-    return <Navigate to="/signup/responder" replace />;
+    return <Navigate to="/signin/responder" replace />;
   }
 
   const responder = session.user as { id?: number; email?: string; name?: string; agency_type?: string };

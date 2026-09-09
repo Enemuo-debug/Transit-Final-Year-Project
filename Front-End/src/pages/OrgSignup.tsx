@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { TopBar, Center, Panel, ErrorNote } from '../components/Layout';
 import { Field } from '../components/Field';
 import { Button } from '../components/Button';
@@ -73,6 +73,14 @@ export function OrgSignup() {
             <Button type="submit" disabled={busy || !company_name || !email || !password}>
               {busy ? 'Registering…' : 'Create account'}
             </Button>
+            <div className="hairline-b mt-2 pt-4 text-center">
+              <span className="data-mono text-[12px] text-on-surface-variant">
+                Already registered?{' '}
+                <Link to="/signin/organization" className="text-on-tertiary-container hover:underline">
+                  Sign in to your organization
+                </Link>
+              </span>
+            </div>
           </form>
         </Panel>
       </Center>
