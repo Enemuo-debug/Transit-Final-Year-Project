@@ -153,6 +153,7 @@ Back-End/**/*.d.ts.map
 Back-End/**/*.js.map
 Back-End/prisma-next.md
 !Back-End/prisma.config.ts
+!Back-End/prisma/contract.d.ts
 
 # Project artefacts that should not live in git
 *.pdf
