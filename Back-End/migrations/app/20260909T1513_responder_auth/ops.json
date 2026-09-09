@@ -1,0 +1,123 @@
+[
+  {
+    "id": "column.public.emergencyResponders.password",
+    "label": "Add column \"password\" to \"emergencyResponders\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "password",
+        "table": "emergencyResponders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"password\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "emergencyResponders",
+          "password"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"password\"",
+        "sql": "ALTER TABLE \"public\".\"emergencyResponders\" ADD COLUMN \"password\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"password\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "emergencyResponders",
+          "password"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "data_migration.backfill-emergencyResponders-password",
+    "label": "Data transform: backfill-emergencyResponders-password",
+    "operationClass": "data",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [
+      {
+        "description": "Check backfill-emergencyResponders-password has work to do",
+        "sql": "SELECT EXISTS (SELECT \"id\" AS \"id\" FROM \"public\".\"emergencyResponders\" WHERE \"password\" IS NULL LIMIT 1) AS ok",
+        "params": []
+      }
+    ],
+    "execute": [
+      {
+        "description": "Run backfill-emergencyResponders-password",
+        "sql": "UPDATE \"public\".\"emergencyResponders\" SET \"password\" = $1 WHERE \"password\" IS NULL",
+        "params": [
+          "$2b$10$vs4dYOYqC/IVqB.KJi9hY.s35OppYSXIVeDsQDevRPf.u1DCatpyu"
+        ]
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Verify backfill-emergencyResponders-password resolved all violations",
+        "sql": "SELECT NOT EXISTS (SELECT \"id\" AS \"id\" FROM \"public\".\"emergencyResponders\" WHERE \"password\" IS NULL LIMIT 1) AS ok",
+        "params": []
+      }
+    ]
+  },
+  {
+    "id": "alterNullability.setNotNull.emergencyResponders.password",
+    "label": "Set NOT NULL on \"emergencyResponders\".\"password\"",
+    "operationClass": "destructive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "password",
+        "table": "emergencyResponders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"password\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "emergencyResponders",
+          "password"
+        ]
+      },
+      {
+        "description": "ensure no NULL values in \"password\"",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"public\".\"emergencyResponders\" WHERE \"password\" IS NULL) AS \"result\"",
+        "params": []
+      }
+    ],
+    "execute": [
+      {
+        "description": "set NOT NULL on \"password\"",
+        "sql": "ALTER TABLE \"public\".\"emergencyResponders\" ALTER COLUMN \"password\" SET NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"password\" is NOT NULL",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3 AND \"is_nullable\" = $4)) AS \"result\"",
+        "params": [
+          "public",
+          "emergencyResponders",
+          "password",
+          "NO"
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,81 @@
+[
+  {
+    "id": "data_migration.handle-nulls-company-company_name",
+    "label": "Data transform: handle-nulls-company-company_name",
+    "operationClass": "data",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [
+      {
+        "description": "Check handle-nulls-company-company_name has work to do",
+        "sql": "SELECT EXISTS (SELECT \"id\" AS \"id\" FROM \"public\".\"company\" WHERE \"company_name\" IS NULL LIMIT 1) AS ok",
+        "params": []
+      }
+    ],
+    "execute": [
+      {
+        "description": "Run handle-nulls-company-company_name",
+        "sql": "UPDATE \"public\".\"company\" SET \"company_name\" = $1 WHERE \"company_name\" IS NULL",
+        "params": [
+          "Unknown"
+        ]
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Verify handle-nulls-company-company_name resolved all violations",
+        "sql": "SELECT NOT EXISTS (SELECT \"id\" AS \"id\" FROM \"public\".\"company\" WHERE \"company_name\" IS NULL LIMIT 1) AS ok",
+        "params": []
+      }
+    ]
+  },
+  {
+    "id": "alterNullability.setNotNull.company.company_name",
+    "label": "Set NOT NULL on \"company\".\"company_name\"",
+    "operationClass": "destructive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "company_name",
+        "table": "company"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"company_name\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "company",
+          "company_name"
+        ]
+      },
+      {
+        "description": "ensure no NULL values in \"company_name\"",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"public\".\"company\" WHERE \"company_name\" IS NULL) AS \"result\"",
+        "params": []
+      }
+    ],
+    "execute": [
+      {
+        "description": "set NOT NULL on \"company_name\"",
+        "sql": "ALTER TABLE \"public\".\"company\" ALTER COLUMN \"company_name\" SET NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"company_name\" is NOT NULL",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3 AND \"is_nullable\" = $4)) AS \"result\"",
+        "params": [
+          "public",
+          "company",
+          "company_name",
+          "NO"
+        ]
+      }
+    ]
+  }
+]

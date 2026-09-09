@@ -1,0 +1,385 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "table.bus",
+    "label": "Create table \"bus\"",
+    "summary": "Creates table \"bus\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "bus"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"bus\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"bus\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"bus\"",
+        "sql": "CREATE TABLE \"public\".\"bus\" (\n  \"capacity\" int4 NOT NULL,\n  \"company_id\" int4 NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"plate_number\" text NOT NULL,\n  \"reg_date\" timestamptz DEFAULT (now()) NOT NULL,\n  \"status\" text DEFAULT 'OFFLINE' NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"bus_status_check_e23d3ba9\" CHECK (\"status\" IN ('ACTIVE', 'MAINTENANCE', 'OFFLINE'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"bus\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"bus\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.company",
+    "label": "Create table \"company\"",
+    "summary": "Creates table \"company\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "company"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"company\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"company\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"company\"",
+        "sql": "CREATE TABLE \"public\".\"company\" (\n  \"company_name\" text,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"password\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"company\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"company\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.emergencyResponders",
+    "label": "Create table \"emergencyResponders\"",
+    "summary": "Creates table \"emergencyResponders\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "emergencyResponders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"emergencyResponders\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"emergencyResponders\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"emergencyResponders\"",
+        "sql": "CREATE TABLE \"public\".\"emergencyResponders\" (\n  \"agency_type\" text NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"name\" text NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"emergencyResponders_agency_type_check_62d1a73a\" CHECK (\"agency_type\" IN ('POLICE', 'FRSC', 'NEMA', 'MEDICAL'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"emergencyResponders\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"emergencyResponders\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.bus.bus_plate_number_key",
+    "label": "Add unique constraint on \"bus\" (plate_number)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "bus_plate_number_key",
+        "table": "bus"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"bus_plate_number_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_plate_number_key",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"bus_plate_number_key\"",
+        "sql": "ALTER TABLE \"public\".\"bus\" ADD CONSTRAINT \"bus_plate_number_key\" UNIQUE (\"plate_number\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"bus_plate_number_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_plate_number_key",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.company.company_email_key",
+    "label": "Add unique constraint on \"company\" (email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "company_email_key",
+        "table": "company"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"company_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "company_email_key",
+          "public",
+          "\"public\".\"company\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"company_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"company\" ADD CONSTRAINT \"company_email_key\" UNIQUE (\"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"company_email_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "company_email_key",
+          "public",
+          "\"public\".\"company\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.emergencyResponders.emergencyResponders_name_key",
+    "label": "Add unique constraint on \"emergencyResponders\" (name)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "emergencyResponders_name_key",
+        "table": "emergencyResponders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"emergencyResponders_name_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "emergencyResponders_name_key",
+          "public",
+          "\"public\".\"emergencyResponders\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"emergencyResponders_name_key\"",
+        "sql": "ALTER TABLE \"public\".\"emergencyResponders\" ADD CONSTRAINT \"emergencyResponders_name_key\" UNIQUE (\"name\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"emergencyResponders_name_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "emergencyResponders_name_key",
+          "public",
+          "\"public\".\"emergencyResponders\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.emergencyResponders.emergencyResponders_email_key",
+    "label": "Add unique constraint on \"emergencyResponders\" (email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "emergencyResponders_email_key",
+        "table": "emergencyResponders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"emergencyResponders_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "emergencyResponders_email_key",
+          "public",
+          "\"public\".\"emergencyResponders\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"emergencyResponders_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"emergencyResponders\" ADD CONSTRAINT \"emergencyResponders_email_key\" UNIQUE (\"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"emergencyResponders_email_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "emergencyResponders_email_key",
+          "public",
+          "\"public\".\"emergencyResponders\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.bus.bus_company_id_idx_1303a718",
+    "label": "Create index \"bus_company_id_idx_1303a718\" on \"bus\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "bus_company_id_idx_1303a718",
+        "table": "bus"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"bus_company_id_idx_1303a718\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"bus_company_id_idx_1303a718\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"bus_company_id_idx_1303a718\"",
+        "sql": "CREATE INDEX \"bus_company_id_idx_1303a718\" ON \"public\".\"bus\" (\"company_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"bus_company_id_idx_1303a718\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"bus_company_id_idx_1303a718\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.bus.bus_company_id_fkey",
+    "label": "Add foreign key \"bus_company_id_fkey\" on \"bus\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "bus_company_id_fkey",
+        "table": "bus"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"bus_company_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_company_id_fkey",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"bus_company_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"bus\"\nADD CONSTRAINT \"bus_company_id_fkey\"\nFOREIGN KEY (\"company_id\")\nREFERENCES \"public\".\"company\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"bus_company_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_company_id_fkey",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ]
+  }
+]

@@ -141,3 +141,18 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Docker / local database volumes
+Database/HDD/
+Database/RAM/
+
+# Prisma Next build artifacts (generated alongside contract schema)
+Back-End/**/*.js
+Back-End/**/*.d.ts
+Back-End/**/*.d.ts.map
+Back-End/**/*.js.map
+Back-End/prisma-next.md
+!Back-End/prisma.config.ts
+
+# Project artefacts that should not live in git
+*.pdf

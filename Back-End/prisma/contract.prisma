@@ -1,0 +1,40 @@
+model Company {
+  id            Int                   @id @default(autoincrement())
+  email         String                @unique
+  company_name  String
+  password      String
+  buses         Bus[]
+  createdAt     DateTime              @default(now())
+}
+
+model Bus {
+  id            Int                   @id @default(autoincrement())
+  company_id    Int
+  plate_number  String                @unique
+  capacity      Int
+  status        BUS_STATUS            @default(OFFLINE)
+  reg_date      DateTime              @default(now())
+
+  company       Company               @relation(fields: [company_id], references: [id], onDelete: Cascade)
+}
+
+model EmergencyResponders {
+  id            Int                   @id @default(autoincrement())
+  name          String                @unique
+  email         String                @unique
+  password      String
+  agency_type   AGENCY_TYPES
+}
+
+enum BUS_STATUS {
+  ACTIVE
+  MAINTENANCE
+  OFFLINE
+}
+
+enum AGENCY_TYPES {
+  POLICE
+  FRSC
+  NEMA
+  MEDICAL
+}
