@@ -4,6 +4,10 @@ model Company {
   company_name  String
   password      String
   buses         Bus[]
+  sessions      DriverSession[]
+  routes        Route[]
+  journeys      Journey[]
+  incidents     Incident[]
   createdAt     DateTime              @default(now())
 }
 
@@ -13,9 +17,29 @@ model Bus {
   plate_number  String                @unique
   capacity      Int
   status        BUS_STATUS            @default(OFFLINE)
+  deleted_at    DateTime?
   reg_date      DateTime              @default(now())
 
   company       Company               @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  sessions      DriverSession[]
+  journeys      Journey[]
+  incidents     Incident[]
+  telemetry_points TelemetryPoint[]
+}
+
+model DriverSession {
+  id            Int                   @id @default(autoincrement())
+  session_code  String                @unique
+  plate_number  String
+  company_id    Int
+  is_active     Boolean               @default(true)
+  consumed_at   DateTime?
+  device_id     String?
+  created_at    DateTime              @default(now())
+
+  company       Company               @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  bus           Bus?                  @relation(fields: [plate_number], references: [plate_number])
+  journeys      Journey[]
 }
 
 model EmergencyResponders {
@@ -24,10 +48,177 @@ model EmergencyResponders {
   email         String                @unique
   password      String
   agency_type   AGENCY_TYPES
+  locations     ResponderLocation[]
+  dispatches    IncidentDispatch[]
+}
+
+model Route {
+  id              Int          @id @default(autoincrement())
+  company_id      Int
+  route_code      String
+  name            String
+  polyline        String?
+  is_active       Boolean      @default(true)
+  deleted_at      DateTime?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @default(now())
+
+  company         Company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  route_stops     RouteStop[]
+  journeys        Journey[]
+  incidents       Incident[]
+
+  @@unique([company_id, route_code])
+  @@index([company_id, is_active])
+}
+
+model Stop {
+  id              Int          @id @default(autoincrement())
+  name            String
+  latitude        Float
+  longitude       Float
+  radius_meters   Int          @default(100)
+  created_at      DateTime     @default(now())
+
+  route_stops     RouteStop[]
+}
+
+model RouteStop {
+  route_id        Int
+  stop_id         Int
+  stop_order      Int
+
+  route           Route        @relation(fields: [route_id], references: [id], onDelete: Cascade)
+  stop            Stop         @relation(fields: [stop_id], references: [id], onDelete: Cascade)
+
+  @@id([route_id, stop_id])
+  @@unique([route_id, stop_order])
+  @@index([stop_id])
+}
+
+model Journey {
+  id              Int             @id @default(autoincrement())
+  company_id      Int
+  bus_id          Int
+  route_id        Int
+  session_id      Int?
+  status          JOURNEY_STATUS  @default(SCHEDULED)
+  started_at      DateTime?
+  ended_at        DateTime?
+  deleted_at      DateTime?
+  created_at      DateTime        @default(now())
+
+  company         Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  bus             Bus             @relation(fields: [bus_id], references: [id], onDelete: Cascade)
+  route           Route           @relation(fields: [route_id], references: [id], onDelete: Restrict)
+  session         DriverSession?  @relation(fields: [session_id], references: [id], onDelete: SetNull)
+  incidents       Incident[]
+
+  @@index([company_id, status])
+  @@index([bus_id, status])
+  @@index([route_id, status])
+}
+
+model Incident {
+  id              Int             @id @default(autoincrement())
+  company_id      Int
+  bus_id          Int
+  route_id        Int?
+  journey_id      Int?
+  type            INCIDENT_TYPE
+  severity        INCIDENT_SEVERITY @default(MEDIUM)
+  status          INCIDENT_STATUS @default(OPEN)
+  latitude        Float
+  longitude       Float
+  description     String?
+  detected_at     DateTime        @default(now())
+  resolved_at     DateTime?
+
+  company         Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  bus             Bus             @relation(fields: [bus_id], references: [id], onDelete: Cascade)
+  route           Route?          @relation(fields: [route_id], references: [id], onDelete: SetNull)
+  journey         Journey?        @relation(fields: [journey_id], references: [id], onDelete: SetNull)
+  dispatches      IncidentDispatch[]
+
+  @@index([company_id, status, detected_at])
+  @@index([bus_id, detected_at])
+  @@index([type, status])
+}
+
+model ResponderLocation {
+  id              Int                 @id @default(autoincrement())
+  responder_id    Int
+  branch_name     String
+  latitude        Float
+  longitude       Float
+  is_active       Boolean             @default(true)
+  created_at      DateTime            @default(now())
+
+  responder       EmergencyResponders @relation(fields: [responder_id], references: [id], onDelete: Cascade)
+  dispatches      IncidentDispatch[]
+
+  @@unique([responder_id, branch_name])
+  @@index([latitude, longitude])
+  @@index([responder_id, is_active])
+}
+
+model IncidentDispatch {
+  id                    Int                 @id @default(autoincrement())
+  incident_id           Int
+  responder_id          Int
+  responder_location_id Int?
+  status                DISPATCH_STATUS     @default(PENDING)
+  dispatched_at         DateTime            @default(now())
+  accepted_at           DateTime?
+  arrived_at            DateTime?
+  resolved_at           DateTime?
+  notes                 String?
+
+  incident              Incident            @relation(fields: [incident_id], references: [id], onDelete: Cascade)
+  responder             EmergencyResponders @relation(fields: [responder_id], references: [id], onDelete: Cascade)
+  responder_location   ResponderLocation?  @relation(fields: [responder_location_id], references: [id], onDelete: SetNull)
+
+  @@unique([incident_id, responder_id])
+  @@index([responder_id, status])
+  @@index([incident_id, status])
+}
+
+// Append-only archive of hard-deleted records (audit / intelligence review).
+// Nothing here is ever deleted by the application.
+model ArchivedRecord {
+  id           Int      @id @default(autoincrement())
+  entity_type  String
+  entity_id    Int
+  company_id   Int?
+  snapshot     String
+  deleted_by   String?
+  deleted_at   DateTime @default(now())
+
+  @@index([entity_type, entity_id])
+  @@index([company_id, deleted_at])
+}
+
+model TelemetryPoint {
+  id            Int       @id @default(autoincrement())
+  device_id     String
+  bus_id        Int?
+  journey_id    Int?
+  latitude      Float
+  longitude     Float
+  speed         Float     @default(0)
+  heading       Float     @default(0)
+  recorded_at   DateTime  @default(now())
+
+  bus           Bus?      @relation(fields: [bus_id], references: [id], onDelete: SetNull)
+
+  @@index([device_id, recorded_at])
+  @@index([bus_id, recorded_at])
+  @@index([journey_id, recorded_at])
 }
 
 enum BUS_STATUS {
   ACTIVE
+  ON_JOURNEY
   MAINTENANCE
   OFFLINE
 }
@@ -37,4 +228,44 @@ enum AGENCY_TYPES {
   FRSC
   NEMA
   MEDICAL
+}
+
+enum JOURNEY_STATUS {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum INCIDENT_TYPE {
+  UNANTICIPATED_STOP
+  ROUTE_DEVIATION
+  ACCIDENT
+  BREAKDOWN
+  KIDNAPPING
+  DRIVER_SOS
+}
+
+enum INCIDENT_SEVERITY {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum INCIDENT_STATUS {
+  OPEN
+  DISPATCHED
+  IN_PROGRESS
+  RESOLVED
+  FALSE_ALARM
+}
+
+enum DISPATCH_STATUS {
+  PENDING
+  ACCEPTED
+  EN_ROUTE
+  ON_SCENE
+  COMPLETED
+  DECLINED
 }

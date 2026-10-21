@@ -1,26 +1,36 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import jwt from "jsonwebtoken";
 import { db } from "../prisma/db.js";
-import { AGENCY_TYPES, type AgencyType } from "../services/responder.service.js";
+import { type AgencyType } from "../services/responder.service.js";
 
-export type AuthRole = "COMPANY" | "RESPONDER";
+export type AuthRole = "COMPANY" | "RESPONDER" | "DRIVER";
 
 export interface CompanyAuthUser {
-  role: AuthRole;
+  role: "COMPANY";
   id: number;
   email: string;
   company_name: string;
 }
 
 export interface ResponderAuthUser {
-  role: AuthRole;
+  role: "RESPONDER";
   id: number;
   email: string;
   name: string;
   agency_type: AgencyType;
 }
 
-export type AuthUser = CompanyAuthUser | ResponderAuthUser;
+export interface DriverAuthUser {
+  role: "DRIVER";
+  sessionId: number;
+  companyId: number;
+  plate_number: string;
+  busId: number;
+  session_code: string;
+  deviceId?: string;
+}
+
+export type AuthUser = CompanyAuthUser | ResponderAuthUser | DriverAuthUser;
 
 declare global {
   namespace Express {
@@ -32,8 +42,6 @@ declare global {
 
 const TOKEN_TTL = "7d";
 
-export { AGENCY_TYPES };
-
 function getJwtSecret(): string {
   const secret = process.env["JWT_SECRET"];
   if (!secret) throw new Error("JWT_SECRET_MISSING");
@@ -41,19 +49,21 @@ function getJwtSecret(): string {
 }
 
 export function signToken(user: AuthUser): string {
-  return jwt.sign({ sub: String(user.id), role: user.role }, getJwtSecret(), {
-    expiresIn: TOKEN_TTL,
-  });
+  const sub = user.role === "DRIVER" ? String(user.sessionId) : String(user.id);
+  const payload: Record<string, unknown> = { sub, role: user.role };
+  if (user.role === "DRIVER" && user.deviceId) payload["deviceId"] = user.deviceId;
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_TTL });
 }
 
-export function verifyToken(token: string): { id: number; role: AuthRole } {
+export function verifyToken(token: string): { id: number; role: AuthRole; deviceId?: string } {
   const payload = jwt.verify(token, getJwtSecret());
   if (typeof payload === "string") throw new Error("INVALID_TOKEN");
   const id = Number(payload.sub);
   if (!Number.isInteger(id) || id <= 0) throw new Error("INVALID_TOKEN");
   const role = (payload.role as AuthRole | undefined) ?? null;
-  if (role !== "COMPANY" && role !== "RESPONDER") throw new Error("INVALID_TOKEN");
-  return { id, role };
+  if (role !== "COMPANY" && role !== "RESPONDER" && role !== "DRIVER") throw new Error("INVALID_TOKEN");
+  const deviceId = typeof payload.deviceId === "string" ? payload.deviceId : undefined;
+  return { id, role, ...(deviceId !== undefined ? { deviceId } : {}) };
 }
 
 function readBearerToken(req: Request): string | null {
@@ -101,7 +111,7 @@ export const authenticate: RequestHandler = async (
       email: company.email,
       company_name: company.company_name,
     };
-  } else {
+  } else if (payload.role === "RESPONDER") {
     const responder = await db.orm.public.EmergencyResponders.where({ id: payload.id }).first();
     if (!responder) {
       return res.status(401).json({
@@ -114,6 +124,30 @@ export const authenticate: RequestHandler = async (
       email: responder.email,
       name: responder.name,
       agency_type: responder.agency_type,
+    };
+  } else {
+    const session = await db.orm.public.DriverSession.where({ id: payload.id }).first();
+    if (!session || !session.is_active) {
+      return res.status(401).json({
+        error: { code: "UNAUTHORIZED", message: "Session no longer active." },
+      });
+    }
+    const bus = await db.orm.public.Bus.where({ plate_number: session.plate_number }).first();
+    if (!bus || bus.deleted_at !== null) {
+      return res.status(401).json({
+        error: { code: "UNAUTHORIZED", message: "Session has no bus assigned." },
+      });
+    }
+    req.user = {
+      role: "DRIVER",
+      sessionId: session.id,
+      companyId: session.company_id,
+      plate_number: bus.plate_number,
+      busId: bus.id,
+      session_code: session.session_code,
+      ...(session.device_id !== null && session.device_id !== undefined
+        ? { deviceId: session.device_id }
+        : {}),
     };
   }
 

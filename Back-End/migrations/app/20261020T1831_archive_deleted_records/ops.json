@@ -1,0 +1,203 @@
+[
+  {
+    "id": "dropCheckConstraint.bus.bus_status_check_e23d3ba9",
+    "label": "Drop check constraint \"bus_status_check_e23d3ba9\" on \"bus\"",
+    "operationClass": "destructive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "bus_status_check_e23d3ba9",
+        "table": "bus"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"bus_status_check_e23d3ba9\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_status_check_e23d3ba9",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop check constraint \"bus_status_check_e23d3ba9\"",
+        "sql": "ALTER TABLE \"public\".\"bus\" DROP CONSTRAINT \"bus_status_check_e23d3ba9\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"bus_status_check_e23d3ba9\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_status_check_e23d3ba9",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.archivedRecord",
+    "label": "Create table \"archivedRecord\"",
+    "summary": "Creates table \"archivedRecord\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "archivedRecord"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"archivedRecord\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"archivedRecord\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"archivedRecord\"",
+        "sql": "CREATE TABLE \"public\".\"archivedRecord\" (\n  \"company_id\" int4,\n  \"deleted_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"deleted_by\" text,\n  \"entity_id\" int4 NOT NULL,\n  \"entity_type\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"snapshot\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"archivedRecord\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"archivedRecord\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "checkConstraint.bus.bus_status_check_5c124e77",
+    "label": "Add check constraint \"bus_status_check_5c124e77\" on \"bus\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "bus_status_check_5c124e77",
+        "table": "bus"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"bus_status_check_5c124e77\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_status_check_5c124e77",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add check constraint \"bus_status_check_5c124e77\"",
+        "sql": "ALTER TABLE \"public\".\"bus\" ADD CONSTRAINT \"bus_status_check_5c124e77\" CHECK (\"status\" IN ('ACTIVE', 'ON_JOURNEY', 'MAINTENANCE', 'OFFLINE'))"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"bus_status_check_5c124e77\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "bus_status_check_5c124e77",
+          "public",
+          "\"public\".\"bus\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.archivedRecord.archivedRecord_company_id_deleted_at_idx_5ecd9cd3",
+    "label": "Create index \"archivedRecord_company_id_deleted_at_idx_5ecd9cd3\" on \"archivedRecord\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "archivedRecord_company_id_deleted_at_idx_5ecd9cd3",
+        "table": "archivedRecord"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"archivedRecord_company_id_deleted_at_idx_5ecd9cd3\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"archivedRecord_company_id_deleted_at_idx_5ecd9cd3\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"archivedRecord_company_id_deleted_at_idx_5ecd9cd3\"",
+        "sql": "CREATE INDEX \"archivedRecord_company_id_deleted_at_idx_5ecd9cd3\" ON \"public\".\"archivedRecord\" (\"company_id\", \"deleted_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"archivedRecord_company_id_deleted_at_idx_5ecd9cd3\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"archivedRecord_company_id_deleted_at_idx_5ecd9cd3\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.archivedRecord.archivedRecord_entity_type_entity_id_idx_4cde03a1",
+    "label": "Create index \"archivedRecord_entity_type_entity_id_idx_4cde03a1\" on \"archivedRecord\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "archivedRecord_entity_type_entity_id_idx_4cde03a1",
+        "table": "archivedRecord"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"archivedRecord_entity_type_entity_id_idx_4cde03a1\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"archivedRecord_entity_type_entity_id_idx_4cde03a1\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"archivedRecord_entity_type_entity_id_idx_4cde03a1\"",
+        "sql": "CREATE INDEX \"archivedRecord_entity_type_entity_id_idx_4cde03a1\" ON \"public\".\"archivedRecord\" (\"entity_type\", \"entity_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"archivedRecord_entity_type_entity_id_idx_4cde03a1\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"archivedRecord_entity_type_entity_id_idx_4cde03a1\""
+        ]
+      }
+    ]
+  }
+]

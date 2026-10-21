@@ -1,0 +1,25 @@
+{
+  "name": "transit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TRANSIT — Emergency Response System for Transport Organizations (FYP). Back-End + Front-End + Mobile-App are separate packages.",
+  "scripts": {
+    "install:all": "npm --prefix Back-End install && npm --prefix Front-End install && npm --prefix Mobile-App install",
+    "db:up": "docker compose -f Database/docker-compose.yml up -d",
+    "db:down": "docker compose -f Database/docker-compose.yml down",
+    "build:backend": "npm --prefix Back-End run build",
+    "start:backend": "npm --prefix Back-End start",
+    "dev:backend": "npm --prefix Back-End run dev",
+    "dev:frontend": "npm --prefix Front-End run dev",
+    "build:frontend": "npm --prefix Front-End run build",
+    "preview:frontend": "npm --prefix Front-End run preview -- --host --port 4173",
+    "pwa": "npm run build:frontend && npm run preview:frontend",
+    "dev:mobile": "npm --prefix Mobile-App start",
+    "test": "bash scripts/run-all-tests.sh",
+    "test:unit": "npm --prefix Back-End test",
+    "test:phase1": "bash scripts/phase1-smoke.sh",
+    "test:phase2": "bash scripts/phase2-smoke.sh",
+    "test:phase3": "bash scripts/phase3-smoke.sh",
+    "test:phase4": "bash scripts/phase4-smoke.sh"
+  }
+}

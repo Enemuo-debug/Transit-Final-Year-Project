@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { mapsService } from "../services/index.js";
 import { httpError } from "../middleware/errorHandler.js";
-import { validateQuery, type Schema } from "../middleware/validate.js";
+import { validateBody, validateQuery, type Schema } from "../middleware/validate.js";
 
 export const geocodeQuerySchema: Schema = {
   address: { type: "string", required: true, minLength: 1, maxLength: 500 },
@@ -11,6 +11,17 @@ export const reverseGeocodeQuerySchema: Schema = {
   lat: { type: "number", required: true, min: -90, max: 90 },
   lng: { type: "number", required: true, min: -180, max: 180 },
 };
+
+export const resolveLinkSchema: Schema = {
+  url: { type: "string", required: true, minLength: 10, maxLength: 1000 },
+};
+
+export const validateResolveLink = validateBody(resolveLinkSchema);
+
+export async function resolveLink(req: Request, res: Response) {
+  const result = await mapsService.resolveMapsLink(String(req.body.url ?? ""));
+  return res.status(200).json(result);
+}
 
 export const staticMapQuerySchema: Schema = {
   lat: { type: "number", required: true, min: -90, max: 90 },

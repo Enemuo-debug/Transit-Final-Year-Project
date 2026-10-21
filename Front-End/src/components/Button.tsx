@@ -18,7 +18,7 @@ export function Button({ variant = 'primary', children, className = '', ...rest 
   return (
     <button
       {...rest}
-      className={`label-caps inline-flex items-center justify-center gap-2 px-4 py-3 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${VARIANT_CLASS[variant]} ${className}`}
+      className={`label-caps inline-flex items-center justify-center gap-2 px-4 py-3 transition-all duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:active:translate-y-0 ${VARIANT_CLASS[variant]} ${className}`}
     >
       {children}
     </button>

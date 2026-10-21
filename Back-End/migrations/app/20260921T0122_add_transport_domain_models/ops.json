@@ -1,0 +1,2087 @@
+[
+  {
+    "id": "table.incident",
+    "label": "Create table \"incident\"",
+    "summary": "Creates table \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"incident\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"incident\"",
+        "sql": "CREATE TABLE \"public\".\"incident\" (\n  \"bus_id\" int4 NOT NULL,\n  \"company_id\" int4 NOT NULL,\n  \"description\" text,\n  \"detected_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"journey_id\" int4,\n  \"latitude\" float8 NOT NULL,\n  \"longitude\" float8 NOT NULL,\n  \"resolved_at\" timestamptz,\n  \"route_id\" int4,\n  \"severity\" text DEFAULT 'MEDIUM' NOT NULL,\n  \"status\" text DEFAULT 'OPEN' NOT NULL,\n  \"type\" text NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"incident_severity_check_5e5a5e80\" CHECK (\"severity\" IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),\n  CONSTRAINT \"incident_status_check_ba3a9c90\" CHECK (\"status\" IN ('OPEN', 'DISPATCHED', 'IN_PROGRESS', 'RESOLVED', 'FALSE_ALARM')),\n  CONSTRAINT \"incident_type_check_c6f17e7c\" CHECK (\"type\" IN ('UNANTICIPATED_STOP', 'ROUTE_DEVIATION', 'ACCIDENT', 'BREAKDOWN', 'KIDNAPPING', 'DRIVER_SOS'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"incident\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.incidentDispatch",
+    "label": "Create table \"incidentDispatch\"",
+    "summary": "Creates table \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"incidentDispatch\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"incidentDispatch\"",
+        "sql": "CREATE TABLE \"public\".\"incidentDispatch\" (\n  \"accepted_at\" timestamptz,\n  \"arrived_at\" timestamptz,\n  \"dispatched_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"incident_id\" int4 NOT NULL,\n  \"notes\" text,\n  \"resolved_at\" timestamptz,\n  \"responder_id\" int4 NOT NULL,\n  \"responder_location_id\" int4,\n  \"status\" text DEFAULT 'PENDING' NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"incidentDispatch_status_check_8fd88ccf\" CHECK (\"status\" IN ('PENDING', 'ACCEPTED', 'EN_ROUTE', 'ON_SCENE', 'COMPLETED', 'DECLINED'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"incidentDispatch\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.journey",
+    "label": "Create table \"journey\"",
+    "summary": "Creates table \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"journey\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"journey\"",
+        "sql": "CREATE TABLE \"public\".\"journey\" (\n  \"bus_id\" int4 NOT NULL,\n  \"company_id\" int4 NOT NULL,\n  \"created_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"ended_at\" timestamptz,\n  \"id\" SERIAL NOT NULL,\n  \"route_id\" int4 NOT NULL,\n  \"session_id\" int4,\n  \"started_at\" timestamptz,\n  \"status\" text DEFAULT 'SCHEDULED' NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"journey_status_check_c6f373de\" CHECK (\"status\" IN ('SCHEDULED', 'ACTIVE', 'COMPLETED', 'CANCELLED'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"journey\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.responderLocation",
+    "label": "Create table \"responderLocation\"",
+    "summary": "Creates table \"responderLocation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "responderLocation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"responderLocation\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"responderLocation\"",
+        "sql": "CREATE TABLE \"public\".\"responderLocation\" (\n  \"branch_name\" text NOT NULL,\n  \"created_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"is_active\" bool DEFAULT true NOT NULL,\n  \"latitude\" float8 NOT NULL,\n  \"longitude\" float8 NOT NULL,\n  \"responder_id\" int4 NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"responderLocation\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.route",
+    "label": "Create table \"route\"",
+    "summary": "Creates table \"route\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "route"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"route\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"route\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"route\"",
+        "sql": "CREATE TABLE \"public\".\"route\" (\n  \"company_id\" int4 NOT NULL,\n  \"created_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"is_active\" bool DEFAULT true NOT NULL,\n  \"name\" text NOT NULL,\n  \"polyline\" text,\n  \"route_code\" text NOT NULL,\n  \"updated_at\" timestamptz DEFAULT (now()) NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"route\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"route\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.routeStop",
+    "label": "Create table \"routeStop\"",
+    "summary": "Creates table \"routeStop\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "routeStop"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"routeStop\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"routeStop\"",
+        "sql": "CREATE TABLE \"public\".\"routeStop\" (\n  \"route_id\" int4 NOT NULL,\n  \"stop_id\" int4 NOT NULL,\n  \"stop_order\" int4 NOT NULL,\n  PRIMARY KEY (\"route_id\", \"stop_id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"routeStop\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.stop",
+    "label": "Create table \"stop\"",
+    "summary": "Creates table \"stop\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "stop"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"stop\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"stop\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"stop\"",
+        "sql": "CREATE TABLE \"public\".\"stop\" (\n  \"created_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"latitude\" float8 NOT NULL,\n  \"longitude\" float8 NOT NULL,\n  \"name\" text NOT NULL,\n  \"radius_meters\" int4 DEFAULT 100 NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"stop\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"stop\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.incidentDispatch.incidentDispatch_incident_id_responder_id_key",
+    "label": "Add unique constraint on \"incidentDispatch\" (incident_id, responder_id)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "incidentDispatch_incident_id_responder_id_key",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"incidentDispatch_incident_id_responder_id_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_incident_id_responder_id_key",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"incidentDispatch_incident_id_responder_id_key\"",
+        "sql": "ALTER TABLE \"public\".\"incidentDispatch\" ADD CONSTRAINT \"incidentDispatch_incident_id_responder_id_key\" UNIQUE (\"incident_id\", \"responder_id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"incidentDispatch_incident_id_responder_id_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_incident_id_responder_id_key",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.responderLocation.responderLocation_responder_id_branch_name_key",
+    "label": "Add unique constraint on \"responderLocation\" (responder_id, branch_name)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "responderLocation_responder_id_branch_name_key",
+        "table": "responderLocation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"responderLocation_responder_id_branch_name_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "responderLocation_responder_id_branch_name_key",
+          "public",
+          "\"public\".\"responderLocation\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"responderLocation_responder_id_branch_name_key\"",
+        "sql": "ALTER TABLE \"public\".\"responderLocation\" ADD CONSTRAINT \"responderLocation_responder_id_branch_name_key\" UNIQUE (\"responder_id\", \"branch_name\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"responderLocation_responder_id_branch_name_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "responderLocation_responder_id_branch_name_key",
+          "public",
+          "\"public\".\"responderLocation\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.route.route_company_id_route_code_key",
+    "label": "Add unique constraint on \"route\" (company_id, route_code)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "route_company_id_route_code_key",
+        "table": "route"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"route_company_id_route_code_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "route_company_id_route_code_key",
+          "public",
+          "\"public\".\"route\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"route_company_id_route_code_key\"",
+        "sql": "ALTER TABLE \"public\".\"route\" ADD CONSTRAINT \"route_company_id_route_code_key\" UNIQUE (\"company_id\", \"route_code\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"route_company_id_route_code_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "route_company_id_route_code_key",
+          "public",
+          "\"public\".\"route\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.routeStop.routeStop_route_id_stop_order_key",
+    "label": "Add unique constraint on \"routeStop\" (route_id, stop_order)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "routeStop_route_id_stop_order_key",
+        "table": "routeStop"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"routeStop_route_id_stop_order_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "routeStop_route_id_stop_order_key",
+          "public",
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"routeStop_route_id_stop_order_key\"",
+        "sql": "ALTER TABLE \"public\".\"routeStop\" ADD CONSTRAINT \"routeStop_route_id_stop_order_key\" UNIQUE (\"route_id\", \"stop_order\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"routeStop_route_id_stop_order_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "routeStop_route_id_stop_order_key",
+          "public",
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incident.incident_bus_id_detected_at_idx_79d59898",
+    "label": "Create index \"incident_bus_id_detected_at_idx_79d59898\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incident_bus_id_detected_at_idx_79d59898",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incident_bus_id_detected_at_idx_79d59898\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_bus_id_detected_at_idx_79d59898\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incident_bus_id_detected_at_idx_79d59898\"",
+        "sql": "CREATE INDEX \"incident_bus_id_detected_at_idx_79d59898\" ON \"public\".\"incident\" (\"bus_id\", \"detected_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incident_bus_id_detected_at_idx_79d59898\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_bus_id_detected_at_idx_79d59898\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incident.incident_bus_id_idx_6cc9a53f",
+    "label": "Create index \"incident_bus_id_idx_6cc9a53f\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incident_bus_id_idx_6cc9a53f",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incident_bus_id_idx_6cc9a53f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_bus_id_idx_6cc9a53f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incident_bus_id_idx_6cc9a53f\"",
+        "sql": "CREATE INDEX \"incident_bus_id_idx_6cc9a53f\" ON \"public\".\"incident\" (\"bus_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incident_bus_id_idx_6cc9a53f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_bus_id_idx_6cc9a53f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incident.incident_company_id_idx_1303a718",
+    "label": "Create index \"incident_company_id_idx_1303a718\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incident_company_id_idx_1303a718",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incident_company_id_idx_1303a718\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_company_id_idx_1303a718\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incident_company_id_idx_1303a718\"",
+        "sql": "CREATE INDEX \"incident_company_id_idx_1303a718\" ON \"public\".\"incident\" (\"company_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incident_company_id_idx_1303a718\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_company_id_idx_1303a718\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incident.incident_company_id_status_detected_at_idx_d1f097bb",
+    "label": "Create index \"incident_company_id_status_detected_at_idx_d1f097bb\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incident_company_id_status_detected_at_idx_d1f097bb",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incident_company_id_status_detected_at_idx_d1f097bb\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_company_id_status_detected_at_idx_d1f097bb\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incident_company_id_status_detected_at_idx_d1f097bb\"",
+        "sql": "CREATE INDEX \"incident_company_id_status_detected_at_idx_d1f097bb\" ON \"public\".\"incident\" (\"company_id\", \"status\", \"detected_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incident_company_id_status_detected_at_idx_d1f097bb\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_company_id_status_detected_at_idx_d1f097bb\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incident.incident_journey_id_idx_2c4ae44f",
+    "label": "Create index \"incident_journey_id_idx_2c4ae44f\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incident_journey_id_idx_2c4ae44f",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incident_journey_id_idx_2c4ae44f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_journey_id_idx_2c4ae44f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incident_journey_id_idx_2c4ae44f\"",
+        "sql": "CREATE INDEX \"incident_journey_id_idx_2c4ae44f\" ON \"public\".\"incident\" (\"journey_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incident_journey_id_idx_2c4ae44f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_journey_id_idx_2c4ae44f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incident.incident_route_id_idx_c251327f",
+    "label": "Create index \"incident_route_id_idx_c251327f\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incident_route_id_idx_c251327f",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incident_route_id_idx_c251327f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_route_id_idx_c251327f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incident_route_id_idx_c251327f\"",
+        "sql": "CREATE INDEX \"incident_route_id_idx_c251327f\" ON \"public\".\"incident\" (\"route_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incident_route_id_idx_c251327f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_route_id_idx_c251327f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incident.incident_type_status_idx_f045f361",
+    "label": "Create index \"incident_type_status_idx_f045f361\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incident_type_status_idx_f045f361",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incident_type_status_idx_f045f361\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_type_status_idx_f045f361\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incident_type_status_idx_f045f361\"",
+        "sql": "CREATE INDEX \"incident_type_status_idx_f045f361\" ON \"public\".\"incident\" (\"type\", \"status\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incident_type_status_idx_f045f361\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incident_type_status_idx_f045f361\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incidentDispatch.incidentDispatch_incident_id_idx_4eb9ca99",
+    "label": "Create index \"incidentDispatch_incident_id_idx_4eb9ca99\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incidentDispatch_incident_id_idx_4eb9ca99",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incidentDispatch_incident_id_idx_4eb9ca99\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_incident_id_idx_4eb9ca99\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incidentDispatch_incident_id_idx_4eb9ca99\"",
+        "sql": "CREATE INDEX \"incidentDispatch_incident_id_idx_4eb9ca99\" ON \"public\".\"incidentDispatch\" (\"incident_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incidentDispatch_incident_id_idx_4eb9ca99\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_incident_id_idx_4eb9ca99\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incidentDispatch.incidentDispatch_incident_id_status_idx_7e3e5b70",
+    "label": "Create index \"incidentDispatch_incident_id_status_idx_7e3e5b70\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incidentDispatch_incident_id_status_idx_7e3e5b70",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incidentDispatch_incident_id_status_idx_7e3e5b70\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_incident_id_status_idx_7e3e5b70\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incidentDispatch_incident_id_status_idx_7e3e5b70\"",
+        "sql": "CREATE INDEX \"incidentDispatch_incident_id_status_idx_7e3e5b70\" ON \"public\".\"incidentDispatch\" (\"incident_id\", \"status\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incidentDispatch_incident_id_status_idx_7e3e5b70\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_incident_id_status_idx_7e3e5b70\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incidentDispatch.incidentDispatch_responder_id_idx_660913e7",
+    "label": "Create index \"incidentDispatch_responder_id_idx_660913e7\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incidentDispatch_responder_id_idx_660913e7",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incidentDispatch_responder_id_idx_660913e7\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_responder_id_idx_660913e7\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incidentDispatch_responder_id_idx_660913e7\"",
+        "sql": "CREATE INDEX \"incidentDispatch_responder_id_idx_660913e7\" ON \"public\".\"incidentDispatch\" (\"responder_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incidentDispatch_responder_id_idx_660913e7\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_responder_id_idx_660913e7\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incidentDispatch.incidentDispatch_responder_id_status_idx_fc5dbd58",
+    "label": "Create index \"incidentDispatch_responder_id_status_idx_fc5dbd58\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incidentDispatch_responder_id_status_idx_fc5dbd58",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incidentDispatch_responder_id_status_idx_fc5dbd58\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_responder_id_status_idx_fc5dbd58\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incidentDispatch_responder_id_status_idx_fc5dbd58\"",
+        "sql": "CREATE INDEX \"incidentDispatch_responder_id_status_idx_fc5dbd58\" ON \"public\".\"incidentDispatch\" (\"responder_id\", \"status\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incidentDispatch_responder_id_status_idx_fc5dbd58\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_responder_id_status_idx_fc5dbd58\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.incidentDispatch.incidentDispatch_responder_location_id_idx_7f4fc5bd",
+    "label": "Create index \"incidentDispatch_responder_location_id_idx_7f4fc5bd\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "incidentDispatch_responder_location_id_idx_7f4fc5bd",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"incidentDispatch_responder_location_id_idx_7f4fc5bd\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_responder_location_id_idx_7f4fc5bd\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"incidentDispatch_responder_location_id_idx_7f4fc5bd\"",
+        "sql": "CREATE INDEX \"incidentDispatch_responder_location_id_idx_7f4fc5bd\" ON \"public\".\"incidentDispatch\" (\"responder_location_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"incidentDispatch_responder_location_id_idx_7f4fc5bd\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"incidentDispatch_responder_location_id_idx_7f4fc5bd\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.journey.journey_bus_id_idx_6cc9a53f",
+    "label": "Create index \"journey_bus_id_idx_6cc9a53f\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "journey_bus_id_idx_6cc9a53f",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"journey_bus_id_idx_6cc9a53f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_bus_id_idx_6cc9a53f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"journey_bus_id_idx_6cc9a53f\"",
+        "sql": "CREATE INDEX \"journey_bus_id_idx_6cc9a53f\" ON \"public\".\"journey\" (\"bus_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"journey_bus_id_idx_6cc9a53f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_bus_id_idx_6cc9a53f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.journey.journey_bus_id_status_idx_d1c1a79f",
+    "label": "Create index \"journey_bus_id_status_idx_d1c1a79f\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "journey_bus_id_status_idx_d1c1a79f",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"journey_bus_id_status_idx_d1c1a79f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_bus_id_status_idx_d1c1a79f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"journey_bus_id_status_idx_d1c1a79f\"",
+        "sql": "CREATE INDEX \"journey_bus_id_status_idx_d1c1a79f\" ON \"public\".\"journey\" (\"bus_id\", \"status\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"journey_bus_id_status_idx_d1c1a79f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_bus_id_status_idx_d1c1a79f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.journey.journey_company_id_idx_1303a718",
+    "label": "Create index \"journey_company_id_idx_1303a718\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "journey_company_id_idx_1303a718",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"journey_company_id_idx_1303a718\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_company_id_idx_1303a718\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"journey_company_id_idx_1303a718\"",
+        "sql": "CREATE INDEX \"journey_company_id_idx_1303a718\" ON \"public\".\"journey\" (\"company_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"journey_company_id_idx_1303a718\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_company_id_idx_1303a718\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.journey.journey_company_id_status_idx_e3e50399",
+    "label": "Create index \"journey_company_id_status_idx_e3e50399\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "journey_company_id_status_idx_e3e50399",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"journey_company_id_status_idx_e3e50399\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_company_id_status_idx_e3e50399\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"journey_company_id_status_idx_e3e50399\"",
+        "sql": "CREATE INDEX \"journey_company_id_status_idx_e3e50399\" ON \"public\".\"journey\" (\"company_id\", \"status\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"journey_company_id_status_idx_e3e50399\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_company_id_status_idx_e3e50399\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.journey.journey_route_id_idx_c251327f",
+    "label": "Create index \"journey_route_id_idx_c251327f\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "journey_route_id_idx_c251327f",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"journey_route_id_idx_c251327f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_route_id_idx_c251327f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"journey_route_id_idx_c251327f\"",
+        "sql": "CREATE INDEX \"journey_route_id_idx_c251327f\" ON \"public\".\"journey\" (\"route_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"journey_route_id_idx_c251327f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_route_id_idx_c251327f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.journey.journey_route_id_status_idx_3ee8ce07",
+    "label": "Create index \"journey_route_id_status_idx_3ee8ce07\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "journey_route_id_status_idx_3ee8ce07",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"journey_route_id_status_idx_3ee8ce07\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_route_id_status_idx_3ee8ce07\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"journey_route_id_status_idx_3ee8ce07\"",
+        "sql": "CREATE INDEX \"journey_route_id_status_idx_3ee8ce07\" ON \"public\".\"journey\" (\"route_id\", \"status\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"journey_route_id_status_idx_3ee8ce07\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_route_id_status_idx_3ee8ce07\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.journey.journey_session_id_idx_00ba47bf",
+    "label": "Create index \"journey_session_id_idx_00ba47bf\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "journey_session_id_idx_00ba47bf",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"journey_session_id_idx_00ba47bf\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_session_id_idx_00ba47bf\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"journey_session_id_idx_00ba47bf\"",
+        "sql": "CREATE INDEX \"journey_session_id_idx_00ba47bf\" ON \"public\".\"journey\" (\"session_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"journey_session_id_idx_00ba47bf\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"journey_session_id_idx_00ba47bf\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.responderLocation.responderLocation_latitude_longitude_idx_cf6c2b2c",
+    "label": "Create index \"responderLocation_latitude_longitude_idx_cf6c2b2c\" on \"responderLocation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "responderLocation_latitude_longitude_idx_cf6c2b2c",
+        "table": "responderLocation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"responderLocation_latitude_longitude_idx_cf6c2b2c\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation_latitude_longitude_idx_cf6c2b2c\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"responderLocation_latitude_longitude_idx_cf6c2b2c\"",
+        "sql": "CREATE INDEX \"responderLocation_latitude_longitude_idx_cf6c2b2c\" ON \"public\".\"responderLocation\" (\"latitude\", \"longitude\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"responderLocation_latitude_longitude_idx_cf6c2b2c\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation_latitude_longitude_idx_cf6c2b2c\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.responderLocation.responderLocation_responder_id_idx_660913e7",
+    "label": "Create index \"responderLocation_responder_id_idx_660913e7\" on \"responderLocation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "responderLocation_responder_id_idx_660913e7",
+        "table": "responderLocation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"responderLocation_responder_id_idx_660913e7\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation_responder_id_idx_660913e7\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"responderLocation_responder_id_idx_660913e7\"",
+        "sql": "CREATE INDEX \"responderLocation_responder_id_idx_660913e7\" ON \"public\".\"responderLocation\" (\"responder_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"responderLocation_responder_id_idx_660913e7\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation_responder_id_idx_660913e7\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.responderLocation.responderLocation_responder_id_is_active_idx_b308419e",
+    "label": "Create index \"responderLocation_responder_id_is_active_idx_b308419e\" on \"responderLocation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "responderLocation_responder_id_is_active_idx_b308419e",
+        "table": "responderLocation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"responderLocation_responder_id_is_active_idx_b308419e\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation_responder_id_is_active_idx_b308419e\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"responderLocation_responder_id_is_active_idx_b308419e\"",
+        "sql": "CREATE INDEX \"responderLocation_responder_id_is_active_idx_b308419e\" ON \"public\".\"responderLocation\" (\"responder_id\", \"is_active\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"responderLocation_responder_id_is_active_idx_b308419e\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"responderLocation_responder_id_is_active_idx_b308419e\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.route.route_company_id_idx_1303a718",
+    "label": "Create index \"route_company_id_idx_1303a718\" on \"route\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "route_company_id_idx_1303a718",
+        "table": "route"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"route_company_id_idx_1303a718\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"route_company_id_idx_1303a718\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"route_company_id_idx_1303a718\"",
+        "sql": "CREATE INDEX \"route_company_id_idx_1303a718\" ON \"public\".\"route\" (\"company_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"route_company_id_idx_1303a718\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"route_company_id_idx_1303a718\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.route.route_company_id_is_active_idx_5040a192",
+    "label": "Create index \"route_company_id_is_active_idx_5040a192\" on \"route\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "route_company_id_is_active_idx_5040a192",
+        "table": "route"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"route_company_id_is_active_idx_5040a192\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"route_company_id_is_active_idx_5040a192\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"route_company_id_is_active_idx_5040a192\"",
+        "sql": "CREATE INDEX \"route_company_id_is_active_idx_5040a192\" ON \"public\".\"route\" (\"company_id\", \"is_active\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"route_company_id_is_active_idx_5040a192\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"route_company_id_is_active_idx_5040a192\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.routeStop.routeStop_route_id_idx_c251327f",
+    "label": "Create index \"routeStop_route_id_idx_c251327f\" on \"routeStop\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "routeStop_route_id_idx_c251327f",
+        "table": "routeStop"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"routeStop_route_id_idx_c251327f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"routeStop_route_id_idx_c251327f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"routeStop_route_id_idx_c251327f\"",
+        "sql": "CREATE INDEX \"routeStop_route_id_idx_c251327f\" ON \"public\".\"routeStop\" (\"route_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"routeStop_route_id_idx_c251327f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"routeStop_route_id_idx_c251327f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.routeStop.routeStop_stop_id_idx_8f425461",
+    "label": "Create index \"routeStop_stop_id_idx_8f425461\" on \"routeStop\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "routeStop_stop_id_idx_8f425461",
+        "table": "routeStop"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"routeStop_stop_id_idx_8f425461\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"routeStop_stop_id_idx_8f425461\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"routeStop_stop_id_idx_8f425461\"",
+        "sql": "CREATE INDEX \"routeStop_stop_id_idx_8f425461\" ON \"public\".\"routeStop\" (\"stop_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"routeStop_stop_id_idx_8f425461\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"routeStop_stop_id_idx_8f425461\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.incident.incident_company_id_fkey",
+    "label": "Add foreign key \"incident_company_id_fkey\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "incident_company_id_fkey",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"incident_company_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_company_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"incident_company_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"incident\"\nADD CONSTRAINT \"incident_company_id_fkey\"\nFOREIGN KEY (\"company_id\")\nREFERENCES \"public\".\"company\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"incident_company_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_company_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.incident.incident_bus_id_fkey",
+    "label": "Add foreign key \"incident_bus_id_fkey\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "incident_bus_id_fkey",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"incident_bus_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_bus_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"incident_bus_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"incident\"\nADD CONSTRAINT \"incident_bus_id_fkey\"\nFOREIGN KEY (\"bus_id\")\nREFERENCES \"public\".\"bus\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"incident_bus_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_bus_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.incident.incident_route_id_fkey",
+    "label": "Add foreign key \"incident_route_id_fkey\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "incident_route_id_fkey",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"incident_route_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_route_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"incident_route_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"incident\"\nADD CONSTRAINT \"incident_route_id_fkey\"\nFOREIGN KEY (\"route_id\")\nREFERENCES \"public\".\"route\" (\"id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"incident_route_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_route_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.incident.incident_journey_id_fkey",
+    "label": "Add foreign key \"incident_journey_id_fkey\" on \"incident\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "incident_journey_id_fkey",
+        "table": "incident"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"incident_journey_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_journey_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"incident_journey_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"incident\"\nADD CONSTRAINT \"incident_journey_id_fkey\"\nFOREIGN KEY (\"journey_id\")\nREFERENCES \"public\".\"journey\" (\"id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"incident_journey_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incident_journey_id_fkey",
+          "public",
+          "\"public\".\"incident\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.incidentDispatch.incidentDispatch_incident_id_fkey",
+    "label": "Add foreign key \"incidentDispatch_incident_id_fkey\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "incidentDispatch_incident_id_fkey",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"incidentDispatch_incident_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_incident_id_fkey",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"incidentDispatch_incident_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"incidentDispatch\"\nADD CONSTRAINT \"incidentDispatch_incident_id_fkey\"\nFOREIGN KEY (\"incident_id\")\nREFERENCES \"public\".\"incident\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"incidentDispatch_incident_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_incident_id_fkey",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.incidentDispatch.incidentDispatch_responder_id_fkey",
+    "label": "Add foreign key \"incidentDispatch_responder_id_fkey\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "incidentDispatch_responder_id_fkey",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"incidentDispatch_responder_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_responder_id_fkey",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"incidentDispatch_responder_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"incidentDispatch\"\nADD CONSTRAINT \"incidentDispatch_responder_id_fkey\"\nFOREIGN KEY (\"responder_id\")\nREFERENCES \"public\".\"emergencyResponders\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"incidentDispatch_responder_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_responder_id_fkey",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.incidentDispatch.incidentDispatch_responder_location_id_fkey",
+    "label": "Add foreign key \"incidentDispatch_responder_location_id_fkey\" on \"incidentDispatch\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "incidentDispatch_responder_location_id_fkey",
+        "table": "incidentDispatch"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"incidentDispatch_responder_location_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_responder_location_id_fkey",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"incidentDispatch_responder_location_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"incidentDispatch\"\nADD CONSTRAINT \"incidentDispatch_responder_location_id_fkey\"\nFOREIGN KEY (\"responder_location_id\")\nREFERENCES \"public\".\"responderLocation\" (\"id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"incidentDispatch_responder_location_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "incidentDispatch_responder_location_id_fkey",
+          "public",
+          "\"public\".\"incidentDispatch\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.journey.journey_company_id_fkey",
+    "label": "Add foreign key \"journey_company_id_fkey\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "journey_company_id_fkey",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"journey_company_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_company_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"journey_company_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"journey\"\nADD CONSTRAINT \"journey_company_id_fkey\"\nFOREIGN KEY (\"company_id\")\nREFERENCES \"public\".\"company\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"journey_company_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_company_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.journey.journey_bus_id_fkey",
+    "label": "Add foreign key \"journey_bus_id_fkey\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "journey_bus_id_fkey",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"journey_bus_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_bus_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"journey_bus_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"journey\"\nADD CONSTRAINT \"journey_bus_id_fkey\"\nFOREIGN KEY (\"bus_id\")\nREFERENCES \"public\".\"bus\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"journey_bus_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_bus_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.journey.journey_route_id_fkey",
+    "label": "Add foreign key \"journey_route_id_fkey\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "journey_route_id_fkey",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"journey_route_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_route_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"journey_route_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"journey\"\nADD CONSTRAINT \"journey_route_id_fkey\"\nFOREIGN KEY (\"route_id\")\nREFERENCES \"public\".\"route\" (\"id\")\nON DELETE RESTRICT"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"journey_route_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_route_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.journey.journey_session_id_fkey",
+    "label": "Add foreign key \"journey_session_id_fkey\" on \"journey\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "journey_session_id_fkey",
+        "table": "journey"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"journey_session_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_session_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"journey_session_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"journey\"\nADD CONSTRAINT \"journey_session_id_fkey\"\nFOREIGN KEY (\"session_id\")\nREFERENCES \"public\".\"driverSession\" (\"id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"journey_session_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "journey_session_id_fkey",
+          "public",
+          "\"public\".\"journey\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.responderLocation.responderLocation_responder_id_fkey",
+    "label": "Add foreign key \"responderLocation_responder_id_fkey\" on \"responderLocation\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "responderLocation_responder_id_fkey",
+        "table": "responderLocation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"responderLocation_responder_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "responderLocation_responder_id_fkey",
+          "public",
+          "\"public\".\"responderLocation\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"responderLocation_responder_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"responderLocation\"\nADD CONSTRAINT \"responderLocation_responder_id_fkey\"\nFOREIGN KEY (\"responder_id\")\nREFERENCES \"public\".\"emergencyResponders\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"responderLocation_responder_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "responderLocation_responder_id_fkey",
+          "public",
+          "\"public\".\"responderLocation\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.route.route_company_id_fkey",
+    "label": "Add foreign key \"route_company_id_fkey\" on \"route\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "route_company_id_fkey",
+        "table": "route"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"route_company_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "route_company_id_fkey",
+          "public",
+          "\"public\".\"route\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"route_company_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"route\"\nADD CONSTRAINT \"route_company_id_fkey\"\nFOREIGN KEY (\"company_id\")\nREFERENCES \"public\".\"company\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"route_company_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "route_company_id_fkey",
+          "public",
+          "\"public\".\"route\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.routeStop.routeStop_route_id_fkey",
+    "label": "Add foreign key \"routeStop_route_id_fkey\" on \"routeStop\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "routeStop_route_id_fkey",
+        "table": "routeStop"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"routeStop_route_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "routeStop_route_id_fkey",
+          "public",
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"routeStop_route_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"routeStop\"\nADD CONSTRAINT \"routeStop_route_id_fkey\"\nFOREIGN KEY (\"route_id\")\nREFERENCES \"public\".\"route\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"routeStop_route_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "routeStop_route_id_fkey",
+          "public",
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.routeStop.routeStop_stop_id_fkey",
+    "label": "Add foreign key \"routeStop_stop_id_fkey\" on \"routeStop\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "routeStop_stop_id_fkey",
+        "table": "routeStop"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"routeStop_stop_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "routeStop_stop_id_fkey",
+          "public",
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"routeStop_stop_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"routeStop\"\nADD CONSTRAINT \"routeStop_stop_id_fkey\"\nFOREIGN KEY (\"stop_id\")\nREFERENCES \"public\".\"stop\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"routeStop_stop_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "routeStop_stop_id_fkey",
+          "public",
+          "\"public\".\"routeStop\""
+        ]
+      }
+    ]
+  }
+]

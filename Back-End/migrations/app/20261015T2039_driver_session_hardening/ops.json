@@ -1,0 +1,86 @@
+[
+  {
+    "id": "column.public.driverSession.consumed_at",
+    "label": "Add column \"consumed_at\" to \"driverSession\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "consumed_at",
+        "table": "driverSession"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"consumed_at\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "driverSession",
+          "consumed_at"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"consumed_at\"",
+        "sql": "ALTER TABLE \"public\".\"driverSession\" ADD COLUMN \"consumed_at\" timestamptz"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"consumed_at\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "driverSession",
+          "consumed_at"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.driverSession.device_id",
+    "label": "Add column \"device_id\" to \"driverSession\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "device_id",
+        "table": "driverSession"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"device_id\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "driverSession",
+          "device_id"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"device_id\"",
+        "sql": "ALTER TABLE \"public\".\"driverSession\" ADD COLUMN \"device_id\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"device_id\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "driverSession",
+          "device_id"
+        ]
+      }
+    ]
+  }
+]

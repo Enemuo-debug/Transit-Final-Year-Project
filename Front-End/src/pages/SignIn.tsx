@@ -10,6 +10,13 @@ const ROLES = [
     eyebrow: 'COMPANY ACCESS',
   },
   {
+    to: '/signin/driver',
+    icon: 'local_shipping',
+    title: 'Driver',
+    subtitle: 'Link a bus with your session code',
+    eyebrow: 'DRIVER ACCESS',
+  },
+  {
     to: '/signin/responder',
     icon: 'biotech',
     title: 'Responder',

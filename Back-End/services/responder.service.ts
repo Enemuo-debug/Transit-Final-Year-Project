@@ -3,14 +3,15 @@ import { db } from "../prisma/db.js";
 
 const SALT_ROUNDS = 10;
 const AGENCY_TYPES = ["POLICE", "FRSC", "NEMA", "MEDICAL"] as const;
-type AgencyType = typeof AGENCY_TYPES[number];
+type AgencyType = (typeof AGENCY_TYPES)[number];
 
 export { AGENCY_TYPES };
 export type { AgencyType };
 
-function stripPassword<T extends { password?: unknown }>(row: T): Omit<T, "password"> {
-  const { password: _, ...rest } = row;
-  return rest;
+function stripPassword(user: any) {
+  const cleanUser = { ...user }; // 1. Create a copy (no mutation)
+  delete cleanUser.password;      // 2. Completely remove the key
+  return cleanUser;               // 3. Return the sanitized copy
 }
 
 export interface CreateResponderInput {

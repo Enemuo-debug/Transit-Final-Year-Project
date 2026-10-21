@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSession } from './api';
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+import { WS_BASE } from './base';
 
 export interface TelemetrySample {
   deviceId: string;
@@ -21,10 +20,11 @@ interface StreamEvent {
 }
 
 function wsUrl(): string {
-  const base = API_BASE.replace(/^http/, 'ws');
   const session = getSession();
   const token = session?.token;
-  return token ? `${base}/ws/telemetry?token=${encodeURIComponent(token)}` : `${base}/ws/telemetry`;
+  return token
+    ? `${WS_BASE}/ws/telemetry?token=${encodeURIComponent(token)}`
+    : `${WS_BASE}/ws/telemetry`;
 }
 
 export function useLivePositions() {

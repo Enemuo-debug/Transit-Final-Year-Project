@@ -1,17 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import { WebSocketServer, WebSocket, type RawData } from "ws";
+import { Temporal } from "temporal-polyfill";
 import { verifyToken } from "../middleware/index.js";
+import { db } from "../prisma/db.js";
+import * as cache from "./cache.service.js";
+import type { LivePosition } from "./cache.service.js";
+import { evaluateSample } from "./anomaly.engine.js";
+import { broadcast, registerRealtimeServer } from "./realtime.service.js";
 
-export interface TelemetrySample {
-  deviceId: string;
-  lat: number;
-  lng: number;
-  speed: number;
-  heading: number;
-  timestamp: string;
-  actor?: string;
-}
+export type TelemetrySample = LivePosition;
 
 interface ClientSocket extends WebSocket {
   id: string;
@@ -19,14 +17,69 @@ interface ClientSocket extends WebSocket {
   role: string | undefined;
 }
 
-const livePositions = new Map<string, TelemetrySample>();
-
-export function getLivePositions(): TelemetrySample[] {
-  return Array.from(livePositions.values());
+export async function getLivePositions(): Promise<TelemetrySample[]> {
+  return cache.listLive();
 }
 
-export function getLivePosition(deviceId: string): TelemetrySample | null {
-  return livePositions.get(deviceId) ?? null;
+export async function getLivePosition(deviceId: string): Promise<TelemetrySample | null> {
+  return cache.getLive(deviceId);
+}
+
+export function recordPosition(sample: TelemetrySample): TelemetrySample {
+  cache.setLive(sample);
+  broadcast({ type: "position", sample });
+  void evaluateSample(sample).catch(() => undefined);
+  return sample;
+}
+
+export function removePosition(deviceId: string): void {
+  void cache.deleteLive(deviceId);
+}
+
+// ---------------------------------------------------------------------------
+// Write-back: periodically persist the live cache into PostgreSQL so we keep
+// durable track history without hitting the DB on every telemetry sample.
+// ---------------------------------------------------------------------------
+const lastFlushed = new Map<string, number>();
+let flushTimer: NodeJS.Timeout | null = null;
+const FLUSH_MS = Number(process.env["TELEMETRY_FLUSH_MS"] ?? 15000);
+
+async function resolveBusId(plate: string): Promise<number | null> {
+  const bus = await db.orm.public.Bus.where({ plate_number: plate }).first();
+  return bus?.id ?? null;
+}
+
+export async function flushLiveTelemetry(): Promise<number> {
+  const samples = await cache.listLive();
+  let written = 0;
+  for (const sample of samples) {
+    const parsed = Date.parse(sample.timestamp);
+    const stamp = Number.isFinite(parsed) ? parsed : Date.now();
+    const previous = lastFlushed.get(sample.deviceId) ?? 0;
+    if (stamp <= previous) continue;
+
+    const busId = await resolveBusId(sample.deviceId);
+    await db.orm.public.TelemetryPoint.create({
+      device_id: sample.deviceId,
+      latitude: sample.lat,
+      longitude: sample.lng,
+      speed: sample.speed,
+      heading: sample.heading,
+      recorded_at: Temporal.Instant.fromEpochMilliseconds(stamp),
+      ...(busId !== null ? { bus_id: busId } : {}),
+    });
+    lastFlushed.set(sample.deviceId, stamp);
+    written += 1;
+  }
+  return written;
+}
+
+export function startTelemetryWriteBack(): void {
+  if (flushTimer) return;
+  flushTimer = setInterval(() => {
+    void flushLiveTelemetry().catch(() => undefined);
+  }, FLUSH_MS);
+  if (typeof flushTimer.unref === "function") flushTimer.unref();
 }
 
 const WS_PATH = "/ws/telemetry";
@@ -66,6 +119,8 @@ function parseSample(raw: RawData): TelemetrySample | null {
 
 export function attachTelemetryServer(httpServer: HttpServer): void {
   const wss = new WebSocketServer({ noServer: true });
+  registerRealtimeServer(wss);
+  startTelemetryWriteBack();
 
   httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
     let url: URL;
@@ -112,19 +167,12 @@ export function attachTelemetryServer(httpServer: HttpServer): void {
       }
       if (ws.role !== undefined) sample.actor = ws.role;
       ws.deviceId = sample.deviceId;
-      livePositions.set(sample.deviceId, sample);
-
-      const broadcast = JSON.stringify({ type: "position", sample });
-      for (const peer of wss.clients as Set<ClientSocket>) {
-        if (peer !== ws && peer.readyState === WebSocket.OPEN) {
-          peer.send(broadcast);
-        }
-      }
+      recordPosition(sample);
     });
 
     ws.on("close", () => {
       if (ws.deviceId !== undefined) {
-        livePositions.delete(ws.deviceId);
+        removePosition(ws.deviceId);
       }
     });
   });

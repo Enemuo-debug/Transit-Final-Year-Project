@@ -26,8 +26,14 @@ export function parseBusId(req: Request): number {
   return id;
 }
 
-export async function getAllBuses(_req: Request, res: Response) {
-  const buses = await busService.getAllBuses();
+export async function getAllBuses(req: Request, res: Response) {
+  const rawCompanyId =
+    req.query["company_id"] !== undefined ? Number(req.query["company_id"]) : undefined;
+  const company_id =
+    rawCompanyId !== undefined && Number.isInteger(rawCompanyId) && rawCompanyId > 0
+      ? rawCompanyId
+      : undefined;
+  const buses = await busService.getAllBuses(company_id);
   return res.status(200).json(buses);
 }
 
@@ -38,7 +44,9 @@ export async function getBusById(req: Request, res: Response) {
 }
 
 export async function createBus(req: Request, res: Response) {
-  const bus = await busService.createBus(req.body);
+  const company_id =
+    req.user && req.user.role === "COMPANY" ? req.user.id : req.body.company_id;
+  const bus = await busService.createBus({ ...req.body, company_id });
   return res.status(201).json(bus);
 }
 
