@@ -66,7 +66,7 @@ function validateField(field: string, value: unknown, rule: FieldRule): string |
 
 export function validate(schema: Schema, source: Source = "body"): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
-    const data = req[source] as Record<string, unknown>;
+    const data = (req[source] ?? {}) as Record<string, unknown>;
     const errors: string[] = [];
 
     for (const [field, rule] of Object.entries(schema)) {

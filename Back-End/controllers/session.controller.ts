@@ -37,8 +37,7 @@ export async function createSession(req: Request, res: Response) {
 export async function listSessions(req: Request, res: Response) {
   const company = requireCompany(req);
   const sessions = await sessionService.getSessionsByCompany(company.id);
-  const active = sessions.find((s) => s.is_active);
-  return res.status(200).json({ sessions, active });
+  return res.status(200).json({ sessions });
 }
 
 export async function deactivateSession(req: Request, res: Response) {

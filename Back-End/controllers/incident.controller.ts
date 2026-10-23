@@ -86,6 +86,8 @@ export async function updateIncidentStatus(req: Request, res: Response) {
 export async function raiseSos(req: Request, res: Response) {
   const driver = requireDriver(req);
   const journey = await journeyService.getActiveJourneyForBus(driver.busId);
+  if (!journey) throw new Error("NO_ACTIVE_JOURNEY");
+
   const result = await incidentService.createIncident({
     company_id: driver.companyId,
     bus_id: driver.busId,
@@ -94,8 +96,8 @@ export async function raiseSos(req: Request, res: Response) {
     latitude: req.body.latitude,
     longitude: req.body.longitude,
     description: req.body.description ?? `Emergency SOS from driver of ${driver.plate_number}.`,
-    ...(journey ? { route_id: journey.route_id } : {}),
-    ...(journey ? { journey_id: journey.id } : {}),
+    route_id: journey.route_id,
+    journey_id: journey.id,
   });
   return res.status(201).json({ ...result.incident, deduplicated: !result.created });
 }

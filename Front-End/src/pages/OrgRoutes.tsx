@@ -4,6 +4,7 @@ import {
   getSession,
   getRoutes,
   createRoute,
+  updateRoute,
   deleteRoute,
   errorLabel,
   type Route,
@@ -46,10 +47,12 @@ export function OrgRoutes() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const [routeCode, setRouteCode] = useState('');
   const [name, setName] = useState('');
   const [polyline, setPolyline] = useState('');
+  const [polylineTouched, setPolylineTouched] = useState(false);
   const [stops, setStops] = useState<StopDraft[]>([emptyStop()]);
   const [picking, setPicking] = useState(true);
   const [naming, setNaming] = useState(false);
@@ -124,17 +127,58 @@ export function OrgRoutes() {
     }
   }
 
+  function wktFromStops(list: RouteStopInput[]): string | null {
+    if (list.length < 2) return null;
+    return `LINESTRING(${list
+      .map((s) => `${s.longitude} ${s.latitude}`)
+      .join(', ')})`;
+  }
+
   function buildPolylineFromStops() {
-    const valid = stops.filter((s) => isCoord(s.latitude) && isCoord(s.longitude));
-    if (valid.length < 2) {
+    const valid = stops
+      .filter((s) => isCoord(s.latitude) && isCoord(s.longitude))
+      .map((s) => ({
+        name: s.name.trim() || 'Stop',
+        latitude: Number(s.latitude),
+        longitude: Number(s.longitude),
+      }));
+    const wkt = wktFromStops(valid);
+    if (!wkt) {
       setError('Add at least two stops (or click the map) to build a corridor.');
       return;
     }
-    const wkt = `LINESTRING(${valid
-      .map((s) => `${Number(s.longitude)} ${Number(s.latitude)}`)
-      .join(', ')})`;
     setPolyline(wkt);
+    setPolylineTouched(false);
     setError(null);
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setRouteCode('');
+    setName('');
+    setPolyline('');
+    setPolylineTouched(false);
+    setStops([emptyStop()]);
+  }
+
+  function onEdit(route: Route) {
+    setEditingId(route.id);
+    setRouteCode(route.route_code);
+    setName(route.name);
+    setPolyline(route.polyline ?? '');
+    setPolylineTouched(false);
+    setStops(
+      route.stops.length > 0
+        ? route.stops.map((s) => ({
+            name: s.name,
+            latitude: String(s.latitude),
+            longitude: String(s.longitude),
+            radius: String(s.radius_meters),
+          }))
+        : [emptyStop()],
+    );
+    setError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function onSubmit(e: FormEvent) {
@@ -151,16 +195,27 @@ export function OrgRoutes() {
           longitude: Number(s.longitude),
           radius_meters: s.radius ? Number(s.radius) : undefined,
         }));
-      await createRoute({
+
+      // Editing stops rebuilds the corridor automatically, unless the user
+      // typed a custom WKT themselves.
+      const finalPolyline = polylineTouched
+        ? polyline.trim()
+        : wktFromStops(parsedStops) ?? polyline.trim();
+
+      const input = {
         route_code: routeCode,
         name,
-        ...(polyline.trim() ? { polyline: polyline.trim() } : {}),
+        ...(finalPolyline ? { polyline: finalPolyline } : {}),
         stops: parsedStops,
-      });
-      setRouteCode('');
-      setName('');
-      setPolyline('');
-      setStops([emptyStop()]);
+      };
+
+      if (editingId !== null) {
+        await updateRoute(editingId, input);
+      } else {
+        await createRoute(input);
+      }
+
+      resetForm();
       await refresh();
     } catch (err) {
       setError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
@@ -174,6 +229,7 @@ export function OrgRoutes() {
     setError(null);
     try {
       await deleteRoute(id);
+      if (editingId === id) resetForm();
       setRoutes((current) => current.filter((r) => r.id !== id));
     } catch (err) {
       setError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
@@ -288,7 +344,20 @@ export function OrgRoutes() {
           </div>
 
           <div className="hairline bg-surface p-4">
-            <div className="label-caps mb-3 text-on-surface-variant">ROUTE DETAILS</div>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="label-caps text-on-surface-variant">
+                {editingId !== null ? `EDIT ROUTE · ${routeCode}` : 'ROUTE DETAILS'}
+              </span>
+              {editingId !== null ? (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="label-caps text-on-surface-variant hover:text-on-surface"
+                >
+                  Cancel edit
+                </button>
+              ) : null}
+            </div>
             <form onSubmit={onSubmit} className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Route Code" icon="tag" value={routeCode} onChange={setRouteCode} placeholder="LAG-IB" />
@@ -360,15 +429,27 @@ export function OrgRoutes() {
                 <span className="label-caps text-on-surface-variant">Corridor (WKT LineString, optional)</span>
                 <textarea
                   value={polyline}
-                  onChange={(e) => setPolyline(e.target.value)}
+                  onChange={(e) => {
+                    setPolyline(e.target.value);
+                    setPolylineTouched(true);
+                  }}
                   rows={2}
                   placeholder="Built automatically from your stops"
                   className="hairline w-full bg-surface-dim px-3 py-2 data-mono text-[11px] text-on-surface placeholder:text-outline"
                 />
+                <span className="data-mono text-[10px] text-on-surface-variant">
+                  Leave untouched to rebuild from the current stops on save.
+                </span>
               </div>
 
               <Button type="submit" disabled={busy || !routeCode.trim() || !name.trim()}>
-                {busy ? 'Creating…' : 'Create route'}
+                {busy
+                  ? editingId !== null
+                    ? 'Saving…'
+                    : 'Creating…'
+                  : editingId !== null
+                    ? 'Save changes'
+                    : 'Create route'}
               </Button>
             </form>
           </div>
@@ -386,7 +467,7 @@ export function OrgRoutes() {
               picking={picking}
               {...(picking ? { onMapClick } : {})}
             />
-            <div className="pointer-events-none absolute left-3 top-3 border border-outline-variant bg-black/80 px-2 py-1 backdrop-blur-sm">
+            <div className="pointer-events-none absolute left-3 top-3 border border-outline-variant bg-surface/90 px-2 py-1 backdrop-blur-sm">
               <span className="label-caps text-on-surface-variant">
                 {picking ? 'CLICK MAP TO ADD STOP' : 'PICKING OFF'}
               </span>
@@ -394,7 +475,7 @@ export function OrgRoutes() {
           </div>
 
           <div className="hairline bg-surface">
-            <div className="hairline-b flex items-center justify-between border-outline-variant px-4 py-3">
+            <div className="hairline-b flex items-center justify-between border-outline-variant px-5 py-4">
               <span className="label-caps text-on-surface-variant">ROUTE NETWORK</span>
               <span className="data-mono text-[10px] text-on-surface-variant">{routes.length}</span>
             </div>
@@ -405,20 +486,29 @@ export function OrgRoutes() {
                 <div className="p-4 data-mono text-[11px] text-on-surface-variant">No routes yet.</div>
               ) : (
                 routes.map((r) => (
-                  <div key={r.id} className="hairline-b border-outline-variant/40 px-4 py-3">
+                  <div key={r.id} className="hairline-b border-outline-variant/40 px-5 py-4">
                     <div className="flex items-center justify-between">
-                      <span className="data-mono text-[12px] font-bold text-primary">
+                      <span className="data-mono text-[14px] font-bold text-primary">
                         {r.route_code} · {r.name}
                       </span>
-                      <button
-                        onClick={() => void onDelete(r.id)}
-                        className="label-caps flex items-center gap-1 text-on-surface-variant hover:text-error"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">delete</span>
-                        Remove
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => onEdit(r)}
+                          className="label-caps flex items-center gap-1 text-on-tertiary-container hover:underline"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">edit</span>
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => void onDelete(r.id)}
+                          className="label-caps flex items-center gap-1 text-on-surface-variant hover:text-error"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">delete</span>
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                    <div className="data-mono mt-1 text-[10px] text-on-surface-variant">
+                    <div className="data-mono mt-1 text-[11px] text-on-surface-variant">
                       {r.stops.length} stops · {r.polyline ? 'corridor set' : 'no corridor'} ·{' '}
                       {r.is_active ? 'active' : 'inactive'}
                     </div>

@@ -116,7 +116,7 @@ export function OrgIncidents() {
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`label-caps px-3 py-2 transition-colors ${
+            className={`label-caps px-4 py-2.5 transition-colors ${
               filter === f.key
                 ? 'bg-primary text-on-primary'
                 : 'hairline text-on-surface-variant hover:bg-surface-container-high'
@@ -129,7 +129,7 @@ export function OrgIncidents() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="hairline bg-surface xl:col-span-1">
-          <div className="hairline-b border-outline-variant px-4 py-3 label-caps text-on-surface-variant">
+          <div className="hairline-b border-outline-variant px-5 py-4 label-caps text-on-surface-variant">
             INCIDENT FEED ({incidents.length})
           </div>
           <div className="flex max-h-[600px] flex-col overflow-y-auto">
@@ -142,7 +142,7 @@ export function OrgIncidents() {
                 <button
                   key={i.id}
                   onClick={() => void selectIncident(i)}
-                  className={`hairline-b border-outline-variant/40 px-4 py-3 text-left transition-colors hover:bg-surface-container-high ${
+                  className={`hairline-b border-outline-variant/40 px-5 py-4 text-left transition-colors hover:bg-surface-container-high ${
                     selected?.id === i.id ? 'bg-surface-container-high' : ''
                   }`}
                 >
@@ -160,7 +160,7 @@ export function OrgIncidents() {
         </div>
 
         <div className="flex flex-col gap-4 xl:col-span-2">
-          <div className="hairline h-[260px] overflow-hidden bg-black">
+          <div className="hairline h-[300px] overflow-hidden bg-black">
             <LiveMap
               incidents={mapIncidents}
               center={
@@ -174,7 +174,7 @@ export function OrgIncidents() {
           </div>
 
           {selected ? (
-            <div className="hairline bg-surface p-4">
+            <div className="hairline bg-surface p-5">
               <div className="mb-3 flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3">
@@ -201,7 +201,7 @@ export function OrgIncidents() {
               </div>
 
               {selected.description ? (
-                <p className="hairline mb-3 bg-surface-dim p-3 data-mono text-[11px] text-on-surface">
+                <p className="hairline mb-3 bg-surface-dim p-4 data-mono text-[12px] text-on-surface">
                   {selected.description}
                 </p>
               ) : null}

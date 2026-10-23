@@ -114,16 +114,16 @@ export function OrgDashboard() {
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="hairline bg-surface p-4">
+          <div key={s.label} className="hairline bg-surface p-5">
             <div className="label-caps text-on-surface-variant">{s.label}</div>
-            <div className={`data-mono mt-2 text-[28px] font-bold ${s.tone}`}>{s.value}</div>
+            <div className={`data-mono mt-2 text-[32px] font-bold ${s.tone}`}>{s.value}</div>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <div className="hairline relative h-[420px] overflow-hidden bg-black">
+          <div className="hairline relative h-[480px] overflow-hidden bg-black">
             <LiveMap
               positions={positions}
               lines={mapLines}
@@ -132,7 +132,7 @@ export function OrgDashboard() {
               zoom={12}
               height="100%"
             />
-            <div className="pointer-events-none absolute left-3 top-3 border border-outline-variant bg-black/80 p-2 backdrop-blur-sm">
+            <div className="pointer-events-none absolute left-3 top-3 border border-outline-variant bg-surface/90 p-2 backdrop-blur-sm">
               <div className="label-caps text-on-surface-variant">
                 LOC {fmt(lat)}, {fmt(lng)}
               </div>
@@ -142,7 +142,7 @@ export function OrgDashboard() {
 
         <div className="flex flex-col gap-4">
           <div className="hairline bg-surface">
-            <div className="hairline-b flex items-center justify-between border-outline-variant px-4 py-3">
+            <div className="hairline-b flex items-center justify-between border-outline-variant px-5 py-4">
               <span className="label-caps text-on-surface-variant">ACTIVE INCIDENTS</span>
               <span className="data-mono text-[10px] text-on-surface-variant">{openIncidents.length}</span>
             </div>
@@ -153,7 +153,7 @@ export function OrgDashboard() {
                 </div>
               ) : (
                 openIncidents.slice(0, 6).map((i) => (
-                  <div key={i.id} className="hairline-b border-outline-variant/40 px-4 py-2">
+                  <div key={i.id} className="hairline-b border-outline-variant/40 px-5 py-3">
                     <div className="flex items-center justify-between">
                       <span className={`label-caps ${severityTone(i.severity)}`}>{i.type}</span>
                       <span className="data-mono text-[10px] text-on-surface-variant">{i.status}</span>
@@ -168,7 +168,7 @@ export function OrgDashboard() {
           </div>
 
           <div className="hairline bg-surface">
-            <div className="hairline-b flex items-center justify-between border-outline-variant px-4 py-3">
+            <div className="hairline-b flex items-center justify-between border-outline-variant px-5 py-4">
               <span className="label-caps text-on-surface-variant">LIVE ASSETS</span>
               <span className="data-mono text-[10px] text-on-surface-variant">{positions.length} tracking</span>
             </div>
@@ -179,7 +179,7 @@ export function OrgDashboard() {
                 </div>
               ) : (
                 positions.map((p) => (
-                  <div key={p.deviceId} className="hairline-b border-outline-variant/40 px-4 py-2">
+                  <div key={p.deviceId} className="hairline-b border-outline-variant/40 px-5 py-3">
                     <div className="flex items-center justify-between">
                       <span className="data-mono text-[12px] font-bold text-primary">{p.deviceId}</span>
                       <span className="data-mono text-[10px] text-on-surface-variant">
@@ -187,7 +187,7 @@ export function OrgDashboard() {
                       </span>
                     </div>
                     <div className="data-mono mt-1 text-[10px] text-on-surface-variant">
-                      {fmt(p.lat)}, {fmt(p.lng)} · {p.speed.toFixed(0)} km/h
+                      {fmt(p.lat)}, {fmt(p.lng)} · ±{p.accuracy.toFixed(0)} m
                     </div>
                   </div>
                 ))

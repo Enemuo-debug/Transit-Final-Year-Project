@@ -6,7 +6,7 @@ import {
   getRoutes,
   getJourneys,
   createJourney,
-  endJourney,
+  completeJourney,
   deleteJourney,
   errorLabel,
   type Bus,
@@ -83,10 +83,10 @@ export function OrgJourneys() {
     }
   }
 
-  async function onEnd(id: number, status: 'COMPLETED' | 'CANCELLED') {
+  async function onComplete(id: number) {
     setError(null);
     try {
-      await endJourney(id, status);
+      await completeJourney(id);
       await refresh();
     } catch (err) {
       setError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
@@ -94,7 +94,7 @@ export function OrgJourneys() {
   }
 
   async function onDeleteJourney(id: number) {
-    if (!window.confirm('Remove this journey from the log? It is soft-deleted (kept for audit).')) {
+    if (!window.confirm('Delete this completed journey? A copy is kept for audit.')) {
       return;
     }
     setError(null);
@@ -114,7 +114,7 @@ export function OrgJourneys() {
         </div>
       ) : null}
 
-      <div className="hairline mb-4 bg-surface p-4">
+      <div className="hairline mb-4 bg-surface p-5">
         <div className="label-caps mb-1 text-on-surface-variant">ASSIGN BUS TO ROUTE</div>
         <p className="mb-3 data-mono text-[10px] text-on-surface-variant">
           Creates a <span className="text-amber-300">SCHEDULED</span> journey and locks the bus. The
@@ -167,9 +167,11 @@ export function OrgJourneys() {
       </div>
 
       <div className="hairline bg-surface">
-        <div className="hairline-b flex items-center justify-between border-outline-variant px-4 py-3">
+        <div className="hairline-b flex items-center justify-between border-outline-variant px-5 py-4">
           <span className="label-caps text-on-surface-variant">JOURNEY LOG</span>
-          <span className="data-mono text-[10px] text-on-surface-variant">{journeys.length}</span>
+          <span className="data-mono text-[10px] text-on-surface-variant">
+            only COMPLETED can be deleted · {journeys.length}
+          </span>
         </div>
         <div className="flex flex-col">
           {loading ? (
@@ -178,20 +180,20 @@ export function OrgJourneys() {
             <div className="p-4 data-mono text-[11px] text-on-surface-variant">No journeys recorded.</div>
           ) : (
             journeys.map((j) => (
-              <div key={j.id} className="hairline-b flex items-center justify-between border-outline-variant/40 px-4 py-3">
+              <div key={j.id} className="hairline-b flex items-center justify-between border-outline-variant/40 px-5 py-4">
                 <div>
                   <div className="flex items-center gap-3">
-                    <span className="data-mono text-[13px] font-bold text-primary">
+                    <span className="data-mono text-[15px] font-bold text-primary">
                       {j.plate_number ?? `BUS-${j.bus_id}`}
                     </span>
-                    <span className="data-mono text-[11px] text-on-surface-variant">
+                    <span className="data-mono text-[12px] text-on-surface-variant">
                       {j.route_code ?? '—'} · {j.route_name ?? ''}
                     </span>
                     <span className={`label-caps ${STATUS_TONE[j.status] ?? 'text-on-surface-variant'}`}>
                       {j.status}
                     </span>
                   </div>
-                  <div className="data-mono mt-1 text-[10px] text-on-surface-variant">
+                  <div className="data-mono mt-1 text-[11px] text-on-surface-variant">
                     started {j.started_at ? new Date(j.started_at).toLocaleString() : '—'}
                     {j.ended_at ? ` · ended ${new Date(j.ended_at).toLocaleString()}` : ''}
                   </div>
@@ -205,23 +207,20 @@ export function OrgJourneys() {
                     Live view
                   </Link>
                   {j.status === 'ACTIVE' ? (
-                    <Button variant="outline" onClick={() => void onEnd(j.id, 'COMPLETED')}>
+                    <Button variant="outline" onClick={() => void onComplete(j.id)}>
                       Complete
                     </Button>
                   ) : null}
-                  {j.status === 'ACTIVE' || j.status === 'SCHEDULED' ? (
-                    <Button variant="danger" onClick={() => void onEnd(j.id, 'CANCELLED')}>
-                      Cancel
-                    </Button>
+                  {j.status === 'COMPLETED' ? (
+                    <button
+                      onClick={() => void onDeleteJourney(j.id)}
+                      className="label-caps flex items-center gap-1 text-on-surface-variant transition-colors hover:text-error"
+                      title="Delete completed journey (kept for audit)"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                      Delete
+                    </button>
                   ) : null}
-                  <button
-                    onClick={() => void onDeleteJourney(j.id)}
-                    className="label-caps flex items-center gap-1 text-on-surface-variant transition-colors hover:text-error"
-                    title="Soft-delete journey (kept for audit)"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">delete</span>
-                    Delete
-                  </button>
                 </div>
               </div>
             ))

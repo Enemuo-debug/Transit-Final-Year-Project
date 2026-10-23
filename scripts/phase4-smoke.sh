@@ -35,7 +35,8 @@ echo "== TRANSIT Phase 4 smoke test =="
 
 pushd "$ROOT/Back-End" >/dev/null
 # SMTP_* / MAIL_FROM forced empty so the test never sends real email.
-PORT="$PORT" ANOMALY_EVAL_MS=0 INCIDENT_COOLDOWN_MS=2000 DISPATCH_MAX_RESPONDERS=2 \
+PORT="$PORT" ANOMALY_EVAL_MS=0 ANOMALY_STOP_SECONDS=2 ANOMALY_STOP_RADIUS_METERS=30 \
+  ANOMALY_DEVIATION_METERS=200 INCIDENT_COOLDOWN_MS=2000 DISPATCH_MAX_RESPONDERS=2 \
   TELEMETRY_FLUSH_MS=60000 REDIS_URL=redis://localhost:6379 \
   SMTP_HOST= SMTP_USER= SMTP_PASS= MAIL_FROM= \
   node dist/server.js >"$LOG" 2>&1 &
@@ -137,6 +138,23 @@ if grep -q "SMTP not configured" "$LOG"; then
 else
   fail "expected mailer to log a skip"
 fi
+
+# --- any stop -> closest FRSC branch (even though Police Mid is closer) ---
+curl -s -X POST "$BASE/driver/position" -H "$DAUTH" -H 'Content-Type: application/json' \
+  -d '{"lat":6.95,"lng":3.6625,"speed":0,"heading":90}' >/dev/null
+sleep 3
+curl -s -X POST "$BASE/driver/position" -H "$DAUTH" -H 'Content-Type: application/json' \
+  -d '{"lat":6.95,"lng":3.6625,"speed":0,"heading":90}' >/dev/null
+sleep 1.5
+STOP_INC="$(curl -s "$BASE/incidents?bus_id=$BUS_ID&type=UNANTICIPATED_STOP" -H "$AUTH" \
+  | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["id"] if d else "NONE")')"
+[ "$STOP_INC" != "NONE" ] && pass "stop incident created (id=$STOP_INC)" || fail "stop incident not created"
+STOP_DISP="$(curl -s "$BASE/dispatches/incident/$STOP_INC" -H "$AUTH")"
+STOP_COUNT="$(echo "$STOP_DISP" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)))')"
+check "stop dispatched to one responder" "1" "$STOP_COUNT"
+FRSC_NAME="$(echo "$STOP_DISP" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["responder_name"] if d else "")')"
+echo "$FRSC_NAME" | grep -qi "FRSC" && pass "stop dispatch goes to FRSC [$FRSC_NAME]" || fail "stop dispatch responder [$FRSC_NAME]"
+echo "$FRSC_NAME" | grep -qi "Police" && fail "stop wrongly dispatched to Police" || pass "stop not dispatched to Police"
 
 echo
 echo "== Result: $PASSED passed, $FAILED failed =="

@@ -107,6 +107,7 @@ async function decorate(row: DispatchRow, withIncident = true): Promise<Dispatch
 
 function pickNearestPerResponder(
   ranked: NearestResponderLocation[],
+  limit = MAX_RESPONDERS,
 ): NearestResponderLocation[] {
   const seen = new Set<number>();
   const picked: NearestResponderLocation[] = [];
@@ -114,7 +115,7 @@ function pickNearestPerResponder(
     if (seen.has(entry.responder.id)) continue;
     seen.add(entry.responder.id);
     picked.push(entry);
-    if (picked.length >= MAX_RESPONDERS) break;
+    if (picked.length >= limit) break;
   }
   return picked;
 }
@@ -129,7 +130,25 @@ export async function dispatchIncident(incident: IncidentView): Promise<Dispatch
     longitude: incident.longitude,
     limit: MAX_RESPONDERS * 5,
   });
-  const selected = pickNearestPerResponder(ranked);
+  // Any stop on the road -> the closest FRSC branch. If no FRSC unit is
+  // registered, fall back to the closest available responder.
+  // A corridor deviation suggests kidnapping/diversion -> prefer Police.
+  let ordered: NearestResponderLocation[] = ranked;
+  let limit = MAX_RESPONDERS;
+
+  if (incident.type === "UNANTICIPATED_STOP") {
+    const frsc = ranked.filter((entry) => entry.responder.agency_type === "FRSC");
+    ordered = frsc.length > 0 ? frsc : ranked;
+    limit = 1;
+  } else if (incident.type === "ROUTE_DEVIATION") {
+    ordered = [...ranked].sort(
+      (a, b) =>
+        Number(b.responder.agency_type === "POLICE") -
+        Number(a.responder.agency_type === "POLICE"),
+    );
+  }
+
+  const selected = pickNearestPerResponder(ordered, limit);
 
   const created: DispatchRow[] = [];
   for (const entry of selected) {
@@ -203,6 +222,7 @@ async function sendAlerts(
       `Location: ${incident.latitude}, ${incident.longitude}`,
       `Your branch: ${entry.location.branch_name}`,
       `Distance: ${entry.distance_km.toFixed(2)} km`,
+      incident.description ? `Details: ${incident.description}` : "",
       "",
       "Open the responder console to accept and navigate.",
     ].join("\n");

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { routeService } from "../services/index.js";
+import { routeService, spatialService } from "../services/index.js";
 import { httpError } from "../middleware/errorHandler.js";
 import { validateBody, type Schema } from "../middleware/validate.js";
 import type { CompanyAuthUser } from "../middleware/auth.js";
@@ -93,6 +93,21 @@ export async function getRouteById(req: Request, res: Response) {
   const route = await routeService.getRouteById(company.id, parseRouteId(req));
   if (!route) throw httpError({ error: { code: "ROUTE_NOT_FOUND", message: "Route not found." } });
   return res.status(200).json(route);
+}
+
+export async function getRouteCorridor(req: Request, res: Response) {
+  const company = requireCompany(req);
+  const id = parseRouteId(req);
+  const route = await routeService.getRouteById(company.id, id);
+  if (!route) throw httpError({ error: { code: "ROUTE_NOT_FOUND", message: "Route not found." } });
+
+  const requested = Number(req.query["width"]);
+  const width = Number.isFinite(requested) ? Math.min(2000, Math.max(50, requested)) : 300;
+  const corridor = await spatialService.routeCorridorGeoJSON(id, width);
+
+  return res.status(200).json(
+    corridor ?? { type: "FeatureCollection", features: [] },
+  );
 }
 
 export async function createRoute(req: Request, res: Response) {

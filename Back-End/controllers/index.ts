@@ -3,7 +3,6 @@ export * as companyController from "./company.controller.js";
 export * as busController from "./bus.controller.js";
 export * as responderController from "./responder.controller.js";
 export * as responderLocationController from "./responder-location.controller.js";
-export * as telemetryController from "./telemetry.controller.js";
 export * as mapsController from "./maps.controller.js";
 export * as sessionController from "./session.controller.js";
 export * as driverController from "./driver.controller.js";

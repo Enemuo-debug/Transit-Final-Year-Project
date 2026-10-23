@@ -12,11 +12,6 @@ export interface CreateJourneyInput {
   company_id: number;
   bus_id: number;
   route_id: number;
-  session_id?: number;
-}
-
-export interface EndJourneyInput {
-  status: "COMPLETED" | "CANCELLED";
 }
 
 export interface JourneyView {
@@ -24,7 +19,6 @@ export interface JourneyView {
   company_id: number;
   bus_id: number;
   route_id: number;
-  session_id: number | null;
   status: JourneyStatus;
   started_at: Date | null;
   ended_at: Date | null;
@@ -64,7 +58,6 @@ async function decorate(journey: JourneyRow): Promise<JourneyView> {
     company_id: journey.company_id,
     bus_id: journey.bus_id,
     route_id: journey.route_id,
-    session_id: journey.session_id,
     status: journey.status,
     started_at: journey.started_at,
     ended_at: journey.ended_at,
@@ -111,14 +104,18 @@ export async function getActiveJourneyForBus(bus_id: number): Promise<JourneyVie
   return decorate(journey);
 }
 
-/** The journey currently assigned to a bus (scheduled or active), newest first. */
+/**
+ * The journey the driver should see: the newest SCHEDULED/ACTIVE journey,
+ * otherwise the newest completed one (so the driver sees the auto-complete).
+ */
 export async function getJourneyForBus(bus_id: number): Promise<JourneyView | null> {
-  const rows = await db.orm.public.Journey.where({ bus_id }).all();
-  const assigned = rows
-    .filter((r) => r.deleted_at === null && (r.status === "SCHEDULED" || r.status === "ACTIVE"))
+  const rows = (await db.orm.public.Journey.where({ bus_id }).all())
+    .filter((row) => row.deleted_at === null)
     .sort((a, b) => timeMs(b.created_at) - timeMs(a.created_at));
-  const latest = assigned[0];
-  return latest ? decorate(latest) : null;
+
+  const current =
+    rows.find((row) => row.status === "SCHEDULED" || row.status === "ACTIVE") ?? rows[0];
+  return current ? decorate(current) : null;
 }
 
 /**
@@ -140,13 +137,6 @@ export async function createJourney(input: CreateJourneyInput): Promise<JourneyV
     throw new Error("ROUTE_NOT_FOUND");
   }
 
-  if (input.session_id !== undefined) {
-    const session = await db.orm.public.DriverSession.where({ id: input.session_id }).first();
-    if (!session || session.company_id !== input.company_id) {
-      throw new Error("SESSION_NOT_FOUND");
-    }
-  }
-
   const existing = await db.orm.public.Journey.where({ bus_id: input.bus_id }).all();
   const assigned = existing.find(
     (r) => r.deleted_at === null && (r.status === "SCHEDULED" || r.status === "ACTIVE"),
@@ -158,21 +148,20 @@ export async function createJourney(input: CreateJourneyInput): Promise<JourneyV
     bus_id: input.bus_id,
     route_id: input.route_id,
     status: "SCHEDULED",
-    ...(input.session_id !== undefined ? { session_id: input.session_id } : {}),
   });
 
   await db.orm.public.Bus.where({ id: input.bus_id }).update({ status: "ON_JOURNEY" });
   return decorate(journey);
 }
 
-/** Driver starts the assigned journey from the mobile/web driver console. */
-export async function startJourneyByDriver(bus_id: number): Promise<JourneyView> {
+/** Driver starts the SCHEDULED journey assigned to their bus. */
+export async function startJourney(bus_id: number): Promise<JourneyView> {
   const rows = await db.orm.public.Journey.where({ bus_id }).all();
-  const active = rows.find((r) => r.deleted_at === null && r.status === "ACTIVE");
+  const active = rows.find((row) => row.deleted_at === null && row.status === "ACTIVE");
   if (active) return decorate(active);
 
   const scheduled = rows
-    .filter((r) => r.deleted_at === null && r.status === "SCHEDULED")
+    .filter((row) => row.deleted_at === null && row.status === "SCHEDULED")
     .sort((a, b) => timeMs(a.created_at) - timeMs(b.created_at))[0];
   if (!scheduled) throw new Error("JOURNEY_NOT_FOUND");
 
@@ -180,40 +169,68 @@ export async function startJourneyByDriver(bus_id: number): Promise<JourneyView>
     status: "ACTIVE",
     started_at: Temporal.Now.instant(),
   });
-  await db.orm.public.Bus.where({ id: bus_id }).update({ status: "ON_JOURNEY" });
   return decorate(updated ?? scheduled);
 }
 
-/** Driver ends the active journey; the bus returns to ACTIVE (available). */
-export async function endJourneyByDriver(bus_id: number): Promise<JourneyView> {
-  const rows = await db.orm.public.Journey.where({ bus_id }).all();
-  const active = rows.find((r) => r.deleted_at === null && r.status === "ACTIVE");
-  if (!active) throw new Error("JOURNEY_NOT_FOUND");
-
-  const updated = await db.orm.public.Journey.where({ id: active.id }).update({
-    status: "COMPLETED",
-    ended_at: Temporal.Now.instant(),
-  });
-  await releaseBus(bus_id);
-  return decorate(updated ?? active);
-}
-
-export async function endJourney(
+/** Organization marks an ACTIVE journey as COMPLETED. */
+export async function completeJourney(
   company_id: number,
   id: number,
-  input: EndJourneyInput,
 ): Promise<JourneyView | null> {
   const existing = await db.orm.public.Journey.where({ id }).first();
   if (!existing || existing.company_id !== company_id || existing.deleted_at !== null) return null;
+  if (existing.status !== "ACTIVE") throw new Error("JOURNEY_NOT_ACTIVE");
 
   const updated = await db.orm.public.Journey.where({ id }).update({
-    status: input.status,
+    status: "COMPLETED",
     ended_at: Temporal.Now.instant(),
   });
   if (!updated) return null;
 
   await releaseBus(existing.bus_id);
   return decorate(updated);
+}
+
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const radius = 6_371_000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * radius * Math.asin(Math.sqrt(a));
+}
+
+/**
+ * If the bus is inside the destination stop's radius, complete the journey.
+ * Destination = the stop with the highest stop_order on the journey's route.
+ */
+export async function completeAtDestination(
+  bus_id: number,
+  lat: number,
+  lng: number,
+): Promise<JourneyView | null> {
+  const journey = await getActiveJourneyForBus(bus_id);
+  if (!journey) return null;
+
+  const links = await db.orm.public.RouteStop.where({ route_id: journey.route_id }).all();
+  if (links.length === 0) return null;
+
+  const last = links.reduce((a, b) => (b.stop_order > a.stop_order ? b : a));
+  const stop = await db.orm.public.Stop.where({ id: last.stop_id }).first();
+  if (!stop) return null;
+
+  if (distanceMeters(lat, lng, stop.latitude, stop.longitude) > stop.radius_meters) {
+    return null;
+  }
+
+  try {
+    return await completeJourney(journey.company_id, journey.id);
+  } catch {
+    // A concurrent request may already have completed it.
+    return null;
+  }
 }
 
 /**
@@ -227,6 +244,7 @@ export async function deleteJourney(
 ): Promise<boolean> {
   const existing = await db.orm.public.Journey.where({ id }).first();
   if (!existing || existing.company_id !== company_id || existing.deleted_at !== null) return false;
+  if (existing.status !== "COMPLETED") throw new Error("JOURNEY_NOT_COMPLETED");
 
   const view = await decorate(existing);
   await archiveRecord({

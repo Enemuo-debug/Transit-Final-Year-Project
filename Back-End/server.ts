@@ -6,9 +6,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type Request, type Response } from "express";
 import cors from "cors";
-import { authRoutes, companyRoutes, busRoutes, responderRoutes, telemetryRoutes, mapsRoutes, sessionRoutes, driverRoutes, routeRoutes, journeyRoutes, incidentRoutes, dispatchRoutes } from "./routes/index.js";
+import { authRoutes, companyRoutes, busRoutes, responderRoutes, mapsRoutes, sessionRoutes, driverRoutes, routeRoutes, journeyRoutes, incidentRoutes, dispatchRoutes } from "./routes/index.js";
 import { errorHandler } from "./middleware/index.js";
-import { attachTelemetryServer } from "./services/index.js";
+import { attachTelemetryServer, sessionService } from "./services/index.js";
 
 const app = express();
 
@@ -21,11 +21,11 @@ app.get("/health", (_req: Request, res: Response) => {
   return res.status(200).json({ status: "OK" });
 });
 
+
 app.use("/auth", authRoutes);
 app.use("/companies", companyRoutes);
 app.use("/buses", busRoutes);
 app.use("/responders", responderRoutes);
-app.use("/telemetry", telemetryRoutes);
 app.use("/maps", mapsRoutes);
 app.use("/sessions", sessionRoutes);
 app.use("/driver", driverRoutes);
@@ -43,17 +43,19 @@ const API_PREFIXES = [
   "/companies",
   "/buses",
   "/responders",
-  "/telemetry",
   "/maps",
   "/sessions",
-  "/driver",
   "/routes",
   "/journeys",
   "/incidents",
   "/dispatches",
   "/health",
-  "/ws",
   "/assets",
+  // Reserved namespaces for the telemetry/session rebuild. Keeping them here
+  // makes unknown requests return JSON 404 instead of the SPA shell.
+  "/telemetry",
+  "/driver",
+  "/ws",
 ];
 
 if (fs.existsSync(path.join(frontendDist, "index.html"))) {
@@ -76,6 +78,9 @@ const PORT = Number(process.env["PORT"]) || 3000;
 
 const server = http.createServer(app);
 attachTelemetryServer(server);
+
+// Delete unused session codes after their 10-minute window closes.
+sessionService.startSessionSweeper();
 
 function lanAddresses(): string[] {
   const out: string[] = [];

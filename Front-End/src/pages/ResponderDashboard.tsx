@@ -16,6 +16,7 @@ import {
 import { Field } from '../components/Field';
 import { Button } from '../components/Button';
 import { LiveMap, type MapIncident, type MapMarker } from '../components/LiveMap';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { googleMapsLink, resolveMapsLink, mapsLinkErrorLabel } from '../lib/maps';
 
 function fmt(coord: number): string {
@@ -280,6 +281,7 @@ export function ResponderDashboard() {
             <span className="data-mono hidden text-[10px] text-on-surface-variant md:inline">
               {clock}
             </span>
+            <ThemeToggle />
             <button
               onClick={() => {
                 clearSession();

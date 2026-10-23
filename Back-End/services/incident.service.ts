@@ -84,7 +84,15 @@ export interface CreateIncidentResult {
   created: boolean;
 }
 
-export async function createIncident(input: CreateIncidentInput): Promise<CreateIncidentResult> {
+export interface CreateIncidentOptions {
+  /** Set false to record the incident without alerting responders yet. */
+  dispatch?: boolean;
+}
+
+export async function createIncident(
+  input: CreateIncidentInput,
+  options: CreateIncidentOptions = {},
+): Promise<CreateIncidentResult> {
   const cutoff = Date.now() - DEDUP_COOLDOWN_MS;
   const candidates = await db.orm.public.Incident.where({
     bus_id: input.bus_id,
@@ -112,10 +120,14 @@ export async function createIncident(input: CreateIncidentInput): Promise<Create
     ...(input.description !== undefined ? { description: input.description } : {}),
   });
   const view = await decorate(created);
-  void dispatchIncident(view).catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[incident] auto-dispatch failed: ${message}`);
-  });
+
+  if (options.dispatch !== false) {
+    void dispatchIncident(view).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[incident] auto-dispatch failed: ${message}`);
+    });
+  }
+
   return { incident: view, created: true };
 }
 

@@ -7,9 +7,9 @@ const router = Router();
 router.use(authenticate);
 
 router.get("/", journeyController.validateListJourneys, journeyController.listJourneys);
-router.post("/", journeyController.validateStartJourney, journeyController.createJourney);
+router.post("/", journeyController.validateCreateJourney, journeyController.createJourney);
 router.get("/:id", journeyController.getJourneyById);
-router.patch("/:id/end", journeyController.validateEndJourney, journeyController.endJourney);
+router.patch("/:id/complete", journeyController.completeJourney);
 router.delete("/:id", journeyController.deleteJourney);
 
 export const journeyRoutes = router;

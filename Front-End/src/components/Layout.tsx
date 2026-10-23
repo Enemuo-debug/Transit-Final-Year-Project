@@ -1,12 +1,16 @@
 import type { ReactNode } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Brand, Wordmark } from './Brand';
+import { ThemeToggle } from './ThemeToggle';
 
 export function TopBar({ right }: { right?: ReactNode }) {
   return (
     <header className="hairline-b fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-background/85 px-5 py-3 backdrop-blur-sm">
       <Brand />
-      {right ?? <Wordmark />}
+      <div className="flex items-center gap-2">
+        {right ?? <Wordmark />}
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

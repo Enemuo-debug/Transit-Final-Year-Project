@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 const NAV = [
   { to: '/', icon: 'home', label: 'Home' },
@@ -63,6 +64,10 @@ export function Home() {
             <span className="material-symbols-outlined">history</span>
             <span className="font-label-caps text-label-caps">Logs</span>
           </a>
+          <div className="flex items-center justify-between py-xs text-on-surface-variant">
+            <span className="font-label-caps text-label-caps">Theme</span>
+            <ThemeToggle />
+          </div>
           <button className="bg-on-tertiary-container mt-lg w-full py-sm text-[11px] font-bold tracking-widest text-white hover:opacity-90 transition-opacity">
             EMERGENCY HALT
           </button>
@@ -73,6 +78,7 @@ export function Home() {
       <header className="bg-surface fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-outline-variant px-margin-safe md:hidden">
         <span className="text-primary font-display-lg font-bold tracking-tighter">TRANSIT</span>
         <div className="flex items-center gap-md">
+          <ThemeToggle />
           <span className="material-symbols-outlined text-primary">notifications</span>
           <div className="border h-8 w-8 bg-surface-container-highest border-outline" />
         </div>

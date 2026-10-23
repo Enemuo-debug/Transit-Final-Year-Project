@@ -33,6 +33,9 @@ open (one for the Organization, one for the Responder) so you can watch them upd
 
 > Map: `Front-End/.env` already has a MapTiler key, so the live map renders. If it shows
 > "MapTiler not configured", set `VITE_MAPTILER_API_KEY` in `Front-End/.env` and restart.
+>
+> Theme: use the **sun/moon** button in the header (or the Theme row on the home page) to switch
+> **light/dark**. The choice is saved in the browser and applied on reload.
 
 ---
 
@@ -258,13 +261,28 @@ On the **driver** window press **SEND SOS**.
 ✅ A `DRIVER_SOS` **CRITICAL** incident appears immediately in **Incidents** (and the company
 email address receives an alert).
 
-### 8b. Automatic anomaly detection
-Keep the driver streaming and, with DevTools, change the location to a point **far off** the
-corridor (e.g. lat `6.9`, lng `6.0`). Within a few seconds the backend raises a
-**ROUTE_DEVIATION** incident automatically.
-- For a **stop** anomaly: set a location **not near any stop** and leave it. It triggers after
-  the configured time (default 3 minutes). To demo fast, set `ANOMALY_STOP_SECONDS=5` and
-  `ANOMALY_EVAL_MS=0` in `Back-End/.env`, restart the backend, then re-stream.
+### 8b. Automatic anomaly detection (position-based)
+
+The analyser looks at **movement, not speed**:
+- **ROUTE_DEVIATION** — the position is more than `ANOMALY_DEVIATION_METERS` (default 300 m) off
+  the assigned corridor. Raised immediately; the alert says **possible kidnapping/route
+  diversion**, and dispatch prefers **Police** branches.
+- **UNANTICIPATED_STOP** — the vehicle has **not moved for 2 minutes** (`ANOMALY_STOP_SECONDS=120`)
+  and is **not inside any designated stop radius**. The alert says **possible accident, hold-up,
+  breakdown, or kidnapping**, and is dispatched to the **closest FRSC branch** (if no FRSC unit is
+  registered, it falls back to the closest available responder).
+
+To demo:
+- **Deviation:** with DevTools Sensors, set the location far off the corridor (e.g. lat `6.9`,
+  lng `6.0`) → incident appears within a few seconds.
+- **Stop:** set a location **on/near the corridor but away from the stops** (e.g. midpoint
+  `6.95, 3.6625`) and leave it. It triggers after the configured no-movement window. For a fast
+  demo set `ANOMALY_STOP_SECONDS=10` (and `ANOMALY_EVAL_MS=0`) in `Back-End/.env`, restart the
+  backend, then re-stream.
+
+> Speed (`km/h`) is ignored for detection. The engine compares positions over time (drift
+> tolerance `ANOMALY_STOP_RADIUS_METERS=50`), so a stationary bus is detected even if its
+> reported speed is wrong.
 
 ---
 

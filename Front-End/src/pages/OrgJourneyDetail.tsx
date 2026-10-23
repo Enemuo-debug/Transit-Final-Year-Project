@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { FeatureCollection } from 'geojson';
 import { Navigate, useParams, Link } from 'react-router-dom';
-import { getSession, getJourney, getRoutes, errorLabel, type Journey, type Route } from '../lib/api';
+import {
+  getSession,
+  getJourney,
+  getRoutes,
+  getRouteCorridor,
+  errorLabel,
+  type Journey,
+  type Route,
+} from '../lib/api';
 import { useLivePositions } from '../lib/telemetry';
 import { OrgShell } from '../components/OrgShell';
 import { LiveMap, type MapLine, type MapMarker, type MapVehicle } from '../components/LiveMap';
@@ -24,6 +33,7 @@ export function OrgJourneyDetail() {
 
   const [journey, setJourney] = useState<Journey | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
+  const [corridor, setCorridor] = useState<FeatureCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [follow, setFollow] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -45,9 +55,41 @@ export function OrgJourneyDetail() {
   }, [journeyId, session?.role]);
 
   useEffect(() => {
+    if (!route) {
+      setCorridor(null);
+      return;
+    }
+
+    let disposed = false;
+    getRouteCorridor(route.id)
+      .then((data) => {
+        if (!disposed) setCorridor(data);
+      })
+      .catch(() => {
+        if (!disposed) setCorridor(null);
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [route?.id]);
+
+  useEffect(() => {
+    if (journey?.status === 'COMPLETED') return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [journey?.status]);
+
+  // Keep the status fresh when a journey auto-completes at its destination.
+  useEffect(() => {
+    if (session?.role !== 'COMPANY' || !Number.isInteger(journeyId)) return;
+    const timer = setInterval(() => {
+      getJourney(journeyId)
+        .then((next) => setJourney(next))
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [journeyId, session?.role]);
 
   if (!session || session.role !== 'COMPANY') {
     return <Navigate to="/signin/organization" replace />;
@@ -76,9 +118,7 @@ export function OrgJourneyDetail() {
     [route],
   );
 
-  const vehicle: MapVehicle | undefined = live
-    ? { lat: live.lat, lng: live.lng, ...(Number.isFinite(live.heading) ? { heading: live.heading } : {}) }
-    : undefined;
+  const vehicle: MapVehicle | undefined = live ? { lat: live.lat, lng: live.lng } : undefined;
 
   const firstStop = route?.stops[0];
   const routeCenter = firstStop
@@ -88,8 +128,10 @@ export function OrgJourneyDetail() {
   const followCenter = follow && vehicle ? { lat: vehicle.lat, lng: vehicle.lng } : routeCenter;
   const followZoom = follow && vehicle ? 15 : 9;
 
+  const parsedEnd = journey?.ended_at ? Date.parse(journey.ended_at) : now;
+  const journeyEnd = Number.isFinite(parsedEnd) ? parsedEnd : now;
   const elapsed = journey?.started_at
-    ? Math.max(0, Math.floor((now - new Date(journey.started_at).getTime()) / 1000))
+    ? Math.max(0, Math.floor((journeyEnd - new Date(journey.started_at).getTime()) / 1000))
     : null;
   const mm = elapsed !== null ? String(Math.floor(elapsed / 60)).padStart(2, '0') : '--';
   const ss = elapsed !== null ? String(elapsed % 60).padStart(2, '0') : '--';
@@ -123,16 +165,17 @@ export function OrgJourneyDetail() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <div className="hairline relative h-[520px] overflow-hidden bg-black">
+          <div className="hairline relative h-[560px] overflow-hidden bg-black">
             <LiveMap
               lines={routeLine ? [routeLine] : []}
+              corridor={corridor}
               markers={stopMarkers}
               {...(vehicle ? { vehicle } : {})}
               center={followCenter}
               zoom={followZoom}
               height="100%"
             />
-            <div className="pointer-events-none absolute left-3 top-3 border border-outline-variant bg-black/80 px-2 py-1 backdrop-blur-sm">
+            <div className="pointer-events-none absolute left-3 top-3 border border-outline-variant bg-surface/90 px-2 py-1 backdrop-blur-sm">
               <span className="label-caps text-on-surface-variant">
                 {live ? 'LIVE TRACKING' : 'AWAITING TELEMETRY'}
               </span>
@@ -142,7 +185,7 @@ export function OrgJourneyDetail() {
               className={`absolute bottom-3 right-3 flex items-center gap-1 border px-3 py-2 backdrop-blur-sm transition-colors ${
                 follow
                   ? 'border-[#1a73e8] bg-[#1a73e8] text-white'
-                  : 'border-outline-variant bg-black/70 text-on-surface-variant hover:text-on-surface'
+                  : 'border-outline-variant bg-surface/90 text-on-surface-variant hover:text-on-surface'
               }`}
             >
               <span className="material-symbols-outlined text-[18px]">
@@ -154,7 +197,7 @@ export function OrgJourneyDetail() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="hairline bg-surface p-4">
+          <div className="hairline bg-surface p-5">
             <div className="flex items-center justify-between">
               <span className="label-caps text-on-surface-variant">JOURNEY STATUS</span>
               <span className={`label-caps ${statusTone(journey?.status ?? '')}`}>
@@ -164,7 +207,7 @@ export function OrgJourneyDetail() {
             <div className="mt-3 flex items-end justify-between">
               <div>
                 <div className="label-caps text-on-surface-variant">ELAPSED</div>
-                <div className="data-mono text-[28px] font-bold text-on-surface">
+                <div className="data-mono text-[34px] font-bold text-on-surface">
                   {mm}:{ss}
                 </div>
               </div>
@@ -177,17 +220,17 @@ export function OrgJourneyDetail() {
             </div>
           </div>
 
-          <div className="hairline bg-surface p-4">
+          <div className="hairline bg-surface p-5">
             <div className="label-caps mb-2 text-on-surface-variant">VEHICLE</div>
             <div className="data-mono text-[15px] font-bold text-on-surface">
               {journey?.plate_number ?? '—'}
             </div>
             {vehicle ? (
-              <div className="mt-2 grid grid-cols-2 gap-2 data-mono text-[11px] text-on-surface">
+              <div className="mt-2 grid grid-cols-2 gap-2 data-mono text-[12px] text-on-surface">
                 <span>LAT {fmt(vehicle.lat)}</span>
                 <span>LNG {fmt(vehicle.lng)}</span>
-                <span>SPD {live ? live.speed.toFixed(1) : '—'} km/h</span>
-                <span>HDG {live ? live.heading.toFixed(0) : '—'}°</span>
+                <span>ACC ±{live ? live.accuracy.toFixed(0) : '—'} m</span>
+                <span>{live ? 'GPS' : '—'}</span>
                 <span className="col-span-2 text-on-surface-variant">
                   updated {live ? new Date(live.timestamp).toLocaleTimeString() : '—'}
                 </span>
@@ -201,7 +244,7 @@ export function OrgJourneyDetail() {
             )}
           </div>
 
-          <div className="hairline bg-surface p-4">
+          <div className="hairline bg-surface p-5">
             <div className="flex items-center justify-between">
               <span className="label-caps text-on-surface-variant">ROUTE</span>
               <span className="data-mono text-[10px] text-on-surface-variant">
@@ -213,7 +256,7 @@ export function OrgJourneyDetail() {
             </div>
             <div className="mt-2 flex flex-col gap-1">
               {(route?.stops ?? []).map((s) => (
-                <div key={s.stop_id} className="data-mono text-[11px] text-on-surface-variant">
+                <div key={s.stop_id} className="data-mono text-[12px] text-on-surface-variant">
                   <span className="text-on-tertiary-container">{s.stop_order}.</span> {s.name}
                 </div>
               ))}

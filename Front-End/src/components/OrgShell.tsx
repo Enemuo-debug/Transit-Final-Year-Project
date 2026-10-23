@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getSession, clearSession } from '../lib/api';
+import { ThemeToggle } from './ThemeToggle';
 
 export type OrgNavKey = 'dashboard' | 'routes' | 'journeys' | 'incidents' | 'fleet';
 
@@ -46,12 +47,12 @@ export function OrgShell({
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col font-body-md">
-      <header className="fixed top-0 z-50 flex h-12 w-full items-center justify-between border-b border-outline-variant bg-surface/95 px-md backdrop-blur-sm">
+    <div className="controller flex min-h-screen flex-col font-body-md">
+      <header className="fixed top-0 z-50 flex h-14 w-full items-center justify-between border-b border-outline-variant bg-surface/95 px-6 backdrop-blur-sm">
         <div className="flex items-center gap-md">
           <Link
             to="/dashboard/organization"
-            className="text-[18px] font-extrabold leading-none tracking-tighter text-primary"
+            className="text-[20px] font-extrabold leading-none tracking-tighter text-primary"
           >
             TRANSIT
           </Link>
@@ -68,6 +69,7 @@ export function OrgShell({
           <span className="data-mono hidden text-[10px] text-on-surface-variant sm:inline">
             {clock}
           </span>
+          <ThemeToggle />
           <Link
             to="/dashboard/organization/incidents"
             className="material-symbols-outlined text-[20px] text-on-surface-variant transition-colors hover:text-primary"
@@ -88,29 +90,29 @@ export function OrgShell({
         </div>
       </header>
 
-      <div className="mt-12 flex flex-1">
-        <nav className="fixed left-0 top-12 z-40 flex h-[calc(100vh-48px)] w-56 flex-col border-r border-outline-variant bg-surface-container-low py-md">
-          <div className="flex flex-col gap-[2px]">
+      <div className="mt-14 flex flex-1">
+        <nav className="fixed left-0 top-14 z-40 flex h-[calc(100vh-56px)] w-60 flex-col border-r border-outline-variant bg-surface-container-low py-5">
+          <div className="flex flex-col gap-1">
             {NAV.map((item) => {
               const isActive = item.key === active;
               return (
                 <Link
                   key={item.key}
                   to={item.to}
-                  className={`group flex items-center gap-md border-l-2 py-sm pl-[14px] pr-md transition-all duration-150 ${
+                  className={`group flex items-center gap-md border-l-2 py-3 pl-4 pr-5 transition-all duration-150 ${
                     isActive
                       ? 'border-on-tertiary-container bg-surface-container-high text-primary'
                       : 'border-transparent text-on-surface-variant hover:border-outline-variant hover:bg-surface-container-high hover:text-on-surface'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
+                  <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
                   <span className="label-caps">{item.label}</span>
                 </Link>
               );
             })}
           </div>
-          <div className="mt-auto px-md">
-            <div className="data-mono text-[10px] leading-relaxed text-on-surface-variant/70">
+          <div className="mt-auto px-5">
+            <div className="data-mono text-[11px] leading-relaxed text-on-surface-variant/70">
               TRANSIT · Emergency Response
               <br />
               v1.0 · FYP
@@ -118,15 +120,19 @@ export function OrgShell({
           </div>
         </nav>
 
-        <main className="ml-56 flex w-full flex-col">
-          <div className="flex items-end justify-between border-b border-outline-variant bg-surface-container-lowest px-md py-sm">
+        <main className="ml-60 flex w-full flex-col">
+          <div className="flex items-end justify-between border-b border-outline-variant bg-surface-container-lowest px-6 py-4">
             <div>
               <div className="label-caps text-on-surface-variant">{subtitle ?? 'COMMAND CENTER'}</div>
-              <h1 className="mt-1 text-headline-sm font-bold tracking-wide text-on-surface">{title}</h1>
+              <h1 className="mt-1 text-[26px] font-bold tracking-wide text-on-surface lg:text-[30px]">
+                {title}
+              </h1>
             </div>
             <div className="flex items-center gap-sm">{actions}</div>
           </div>
-          <div className="flex-1 overflow-y-auto p-md">{children}</div>
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+          </div>
         </main>
       </div>
     </div>

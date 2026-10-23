@@ -1,3 +1,4 @@
+import type { FeatureCollection } from 'geojson';
 import { API_BASE } from './base';
 
 export interface AuthEntry {
@@ -110,6 +111,16 @@ export function errorLabel(code: string): string {
       return 'Company not found.';
     case 'INVALID_DRIVER_CREDENTIALS':
       return 'Invalid session code or plate number. Check with your dispatcher.';
+    case 'SESSION_CODE_USED':
+      return 'This session code has already been used. Ask your dispatcher for a new one.';
+    case 'SESSION_CODE_EXPIRED':
+      return 'This session code has expired. Ask your dispatcher for a new one.';
+    case 'SESSION_CODE_REVOKED':
+      return 'This session code was revoked. Ask your dispatcher for a new one.';
+    case 'SESSION_CODE_ACTIVE':
+      return 'This bus already has an active code. Use it or wait for it to expire.';
+    case 'BUS_ALREADY_LINKED':
+      return 'This bus already has a linked driver. Release that session before creating a new code.';
     case 'FORBIDDEN':
       return 'You do not have permission for this action.';
     case 'LOCATION_NOT_FOUND':
@@ -138,6 +149,16 @@ export function errorLabel(code: string): string {
       return 'This bus is on a journey; the journey controls its status.';
     case 'JOURNEY_NOT_FOUND':
       return 'Journey not found.';
+    case 'JOURNEY_NOT_ACTIVE':
+      return 'Only an active journey can be completed.';
+    case 'JOURNEY_NOT_COMPLETED':
+      return 'Only completed journeys can be deleted.';
+    case 'NO_ACTIVE_JOURNEY':
+      return 'Start the journey before streaming telemetry.';
+    case 'STREAM_CONFLICT':
+      return 'Another device tried to stream this bus. Both sessions were invalidated. Request a new code.';
+    case 'UNAUTHORIZED':
+      return 'Your session is no longer valid. Request a new code.';
     case 'INCIDENT_NOT_FOUND':
       return 'Incident not found.';
     case 'DISPATCH_NOT_FOUND':
@@ -200,14 +221,14 @@ export interface DriverSession {
   id: number;
   session_code: string;
   plate_number: string;
-  company_id: number;
   is_active: boolean;
   created_at: string;
+  expires_at: string;
+  consumed_at: string | null;
 }
 
 export interface SessionListResult {
   sessions: DriverSession[];
-  active: DriverSession | null;
 }
 
 export function getMySessions(): Promise<SessionListResult> {
@@ -234,6 +255,7 @@ export interface DriverAuthResult {
     plate_number: string;
     busId: number;
     session_code: string;
+    deviceId?: string;
   };
   session: {
     id: number;
@@ -245,6 +267,7 @@ export interface DriverAuthResult {
 
 const DEVICE_KEY = 'transit.deviceId';
 
+/** Stable per-browser/phone id used to pin a driver session code. */
 export function getDeviceId(): string {
   let id = localStorage.getItem(DEVICE_KEY);
   if (!id) {
@@ -264,32 +287,8 @@ export function driverLogin(input: {
   return request<DriverAuthResult>('/driver/login', { ...input, device_id: getDeviceId() });
 }
 
-export function sendPosition(input: {
-  lat: number;
-  lng: number;
-  speed?: number;
-  heading?: number;
-}): Promise<{ ok: boolean; sample: { deviceId: string; lat: number; lng: number } }> {
-  return authRequest<{ ok: boolean; sample: { deviceId: string; lat: number; lng: number } }>(
-    '/driver/position',
-    { method: 'POST', body: JSON.stringify(input) },
-  );
-}
-
-export interface DriverBus {
-  id: number;
-  plate_number: string;
-  capacity: number;
-  status: Bus['status'];
-}
-
-export function getDriverBus(): Promise<DriverBus> {
-  return authRequest<DriverBus>('/driver/bus', { method: 'GET' });
-}
-
 export interface DriverJourneyResult {
   journey: Journey | null;
-  stops: RouteStop[];
 }
 
 export function getMyJourney(): Promise<DriverJourneyResult> {
@@ -300,17 +299,41 @@ export function startMyJourney(): Promise<Journey> {
   return authRequest<Journey>('/driver/journey/start', { method: 'POST' });
 }
 
-export function endMyJourney(): Promise<Journey> {
-  return authRequest<Journey>('/driver/journey/end', { method: 'POST' });
+export interface DriverPosition {
+  deviceId: string;
+  lat: number;
+  lng: number;
+  accuracy: number;
+  timestamp: string;
 }
 
-export function updateDriverStatus(
-  status: 'ACTIVE' | 'MAINTENANCE' | 'OFFLINE',
-): Promise<{ id: number; plate_number: string; status: 'ACTIVE' | 'MAINTENANCE' | 'OFFLINE' }> {
-  return authRequest<{ id: number; plate_number: string; status: 'ACTIVE' | 'MAINTENANCE' | 'OFFLINE' }>(
-    '/driver/status',
-    { method: 'PATCH', body: JSON.stringify({ status }) },
-  );
+export interface TrackingStatus {
+  distance_m: number | null;
+  progress: number | null;
+  deviation: boolean;
+  just_deviated: boolean;
+  corridor_meters: number;
+}
+
+export function sendPosition(input: {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+}): Promise<{
+  ok: boolean;
+  position: DriverPosition;
+  journey: Journey | null;
+  tracking: TrackingStatus | null;
+}> {
+  return authRequest<{
+    ok: boolean;
+    position: DriverPosition;
+    journey: Journey | null;
+    tracking: TrackingStatus | null;
+  }>('/driver/position', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export interface ResponderLocation {
@@ -417,6 +440,12 @@ export function getRoutes(): Promise<Route[]> {
   return authRequest<Route[]>('/routes', { method: 'GET' });
 }
 
+export function getRouteCorridor(id: number, width = 300): Promise<FeatureCollection> {
+  return authRequest<FeatureCollection>(`/routes/${id}/corridor?width=${width}`, {
+    method: 'GET',
+  });
+}
+
 export function createRoute(input: {
   route_code: string;
   name: string;
@@ -453,7 +482,6 @@ export interface Journey {
   company_id: number;
   bus_id: number;
   route_id: number;
-  session_id: number | null;
   status: JourneyStatus;
   started_at: string | null;
   ended_at: string | null;
@@ -476,19 +504,15 @@ export function getJourney(id: number): Promise<Journey> {
 export function createJourney(input: {
   bus_id: number;
   route_id: number;
-  session_id?: number;
 }): Promise<Journey> {
   return authRequest<Journey>('/journeys', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export function endJourney(id: number, status: 'COMPLETED' | 'CANCELLED'): Promise<Journey> {
-  return authRequest<Journey>(`/journeys/${id}/end`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
-  });
+export function completeJourney(id: number): Promise<Journey> {
+  return authRequest<Journey>(`/journeys/${id}/complete`, { method: 'PATCH' });
 }
 
-/** Soft-delete: the record is kept for audit but hidden from listings. */
+/** Delete a COMPLETED journey; an audit copy is archived first. */
 export function deleteJourney(id: number): Promise<void> {
   return authRequest<void>(`/journeys/${id}`, { method: 'DELETE' });
 }

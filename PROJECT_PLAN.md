@@ -28,8 +28,8 @@ The app boots and the core loop works end to end:
 | 11 | Mobile app | `tsc --noEmit` clean, Expo export bundles, WS + REST contract matches backend |
 
 Known gaps found during testing:
-- `GET /maps/config` returns `{"configured":false}` — **Google Maps API key missing**;
-  all geocode / static-map / traffic endpoints will fail until it's set.
+- `GET /maps/config` returns `{"configured":false}` — **MapTiler API key missing**;
+  geocode / reverse-geocode / static-map fail until it's set.
 - Live telemetry is **in-memory only** (Node Map); cleared on server restart, no history.
 - Class Analyser/flag logic absent. Session code can be reused (no expiry/consumption tracking).
 
@@ -63,8 +63,8 @@ Known gaps found during testing:
 | Redis in-memory cache (write-back) | ✗ plain Node `Map`, `fyp-redis` container exists but unused | Use Redis for live positions + route cache ("allowed track") |
 | Persistent spatial DB (PostGIS) | ✓ extension + driverSession, ✗ no geometry columns | Geometry columns (Linestring routes, Point stops) |
 | Route construction + geofencing | ✗ | Route/Stop/RouteStop models + stop-point radius checks |
-| Anomaly detection: deviation / stop / accident / breakdown / kidnapping | ✗ | Analyser engine comparing telemetry against allowed track + halt detection |
-| Detour via Google Maps (Traffic + Distance Matrix) | ✗ key missing, only geocode/static exist | Traffic API + Directions/DistanceMatrix for re-route + congestion classification |
+| Anomaly detection: unanticipated stop / route deviation (possible accident/hold-up/kidnapping) | ✗ | Position-based analyser: no movement for 2 min + corridor deviation |
+| Traffic/congestion/detour | removed from scope | A stop dispatches to the closest FRSC branch; deviation prefers Police |
 | Automated dispatch to nearest responders | ✗ | Nearest-responder query (PostGIS `ST_DWithin`/`ORDER BY distance`) + dispatch records |
 | Email alert to transport managers | ✗ no mailer | Nodemailer/Resend on incident creation |
 | Incident log + audit trail | ✗ | `Incidents` + `IncidentDispatches` persistence |
@@ -80,9 +80,8 @@ Known gaps found during testing:
    `contract.d.ts` files are gitignored. Un-ignore `Back-End/prisma/migrations/**/contract.d.ts`
    (or commit snapshots) so schema changes move through `migration plan` cleanly.
 2. **Environments/config** — `.env` for backend (JWT secret, DB URL, Redis URL,
-   `GOOGLE_MAPS_API_KEY`, SMTP creds) and frontend (Vite `VITE_GOOGLE_MAPS_API_KEY`,
-   API base). Add `.env.example`. Obtain a real Google Maps API key with Traffic +
-   DistanceMatrix enabled. Surface clear 503s → helpful setup messages.
+   `MAPTILER_API_KEY`, SMTP creds) and frontend (Vite `VITE_MAPTILER_API_KEY`,
+   API base). Add `.env.example`. Surface clear 503s → helpful setup messages.
 3. **Wire Redis** — replace in-memory `livePositions` with Redis `fyp-redis`
    (hash `transit:live:*`, TTL ~30–60s, write-back to Postgres on flush/interval).
    Keep WS broadcast as-is.
@@ -110,12 +109,12 @@ Known gaps found during testing:
 
 ### Phase 3 — Anomaly engine (the "smart" core)
 9. **Class /service `anomaly.engine.ts`** — input: telemetry sample + journey track.
-   - *Route deviation*: distance from sample to Linestring corridor > threshold (Redis-cached track).
-   - *Unanticipated stop*: speed≈0 at a non-stop location for N seconds.
-   - *Accident*: sudden high ∆-deceleration, or driver distress flag (body-fixed number/sustained halt).
-   - *Breakdown vs congestion classification*: query Google Maps **Traffic** for the segment —
-     traffic congested → route to FRSC only; clear roadway while stopped → likely breakdown/crash → alert Police+FRSC+NEMA.
-   - *Detour*: Google Maps Directions/DistanceMatrix from current pos to next stop, write new polyline to Redis cache.
+   - *Route deviation*: position farther than the threshold from the LineString corridor
+     (Redis-cached stops/track; distance via PostGIS). Possible kidnapping/diversion.
+   - *Unanticipated stop*: no movement for 2 minutes outside a designated stop
+     (position-based; speed is not used). Possible accident, hold-up, breakdown, or kidnapping.
+   - *Dispatch rule*: stop → closest FRSC branch; route deviation → Police preferred.
+   - No traffic/congestion classification and no automatic detour (removed from scope).
 10. **SOS / distress** — driver dashboard + mobile: an explicit emergency button that
     raises `Incident` immediately (kidnapping/attack case, bypasses analyzer thresholds).
 

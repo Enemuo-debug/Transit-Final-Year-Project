@@ -25,6 +25,18 @@ const STATUS_LABEL: Record<string, string> = {
   OFFLINE: 'Offline',
 };
 
+type SessionState = 'ACTIVE' | 'USED' | 'EXPIRED' | 'REVOKED';
+
+function sessionState(session: DriverSession, now: number): SessionState {
+  if (!session.is_active) return 'REVOKED';
+  if (session.consumed_at) return 'USED';
+  return Date.parse(session.expires_at) > now ? 'ACTIVE' : 'EXPIRED';
+}
+
+function secondsLeft(session: DriverSession, now: number): number {
+  return Math.max(0, Math.floor((Date.parse(session.expires_at) - now) / 1000));
+}
+
 export function BusRegistration() {
   const session = getSession();
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -46,8 +58,25 @@ export function BusRegistration() {
   const [generatedCode, setGeneratedCode] = useState<DriverSession | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [sessionBusy, setSessionBusy] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
 
   const companyId = (session?.user?.id as number) ?? 0;
+
+  function loadSessions() {
+    getMySessions()
+      .then(({ sessions: list }) => {
+        setSessions(list);
+        setGeneratedCode((current) => {
+          if (current) {
+            const same = list.find((row) => row.id === current.id);
+            if (same && sessionState(same, Date.now()) === 'ACTIVE') return same;
+          }
+          // After a reload, restore the newest still-valid code from the database.
+          return list.find((row) => sessionState(row, Date.now()) === 'ACTIVE') ?? null;
+        });
+      })
+      .catch(() => {});
+  }
 
   useEffect(() => {
     if (!session) return;
@@ -55,15 +84,39 @@ export function BusRegistration() {
       .then((list) => setBuses(list.filter((b) => b.company_id === companyId)))
       .catch(() => {})
       .finally(() => setLoading(false));
-    getMySessions()
-      .then(({ sessions: s }) => setSessions(s))
-      .catch(() => {});
+    loadSessions();
     getJourneys('ACTIVE')
       .then((list) => setActiveBusIds(new Set(list.map((j) => j.bus_id))))
       .catch(() => {});
   }, [session, companyId]);
 
-  const activeSessionsFor = (plate: string) => sessions.filter((s) => s.plate_number === plate && s.is_active);
+  // Keep the list in sync with the backend sweep, even if this tab stays open.
+  useEffect(() => {
+    if (!session) return;
+    const id = setInterval(loadSessions, 30000);
+    return () => clearInterval(id);
+  }, [session, companyId]);
+
+  // Drive the countdown without refetching.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const blockingSessionFor = (plate: string) =>
+    sessions.find((s) => {
+      if (s.plate_number !== plate) return false;
+      const state = sessionState(s, now);
+      return state === 'ACTIVE' || state === 'USED';
+    });
+
+  const generatedRemaining = generatedCode ? secondsLeft(generatedCode, now) : 0;
+
+  function formatCountdown(seconds: number): string {
+    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(
+      seconds % 60,
+    ).padStart(2, '0')}`;
+  }
 
   if (!session || session.role !== 'COMPANY') {
     return <Navigate to="/signin/organization" replace />;
@@ -141,8 +194,9 @@ export function BusRegistration() {
     setSessionBusy(plate);
     try {
       const created = await createSession(plate);
-      setSessions((prev) => [created, ...prev]);
+      setSessions((prev) => [created, ...prev.filter((s) => s.id !== created.id)]);
       setGeneratedCode(created);
+      setNow(Date.now());
     } catch (err) {
       setSessionError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
     } finally {
@@ -363,10 +417,16 @@ export function BusRegistration() {
                 <span className="material-symbols-outlined text-white">key</span>
                 <div>
                   <div className="data-mono text-[11px] text-white/70">
-                    NEW SESSION · {generatedCode.plate_number}
+                    {generatedRemaining > 0 ? 'NEW SESSION' : 'EXPIRED CODE'} ·{' '}
+                    {generatedCode.plate_number}
                   </div>
                   <div className="data-mono text-[20px] font-bold tracking-[0.25em] text-white">
                     {generatedCode.session_code}
+                  </div>
+                  <div className="data-mono text-[10px] text-white/70">
+                    {generatedRemaining > 0
+                      ? `EXPIRES IN ${formatCountdown(generatedRemaining)}`
+                      : 'AWAITING SWEEP'}
                   </div>
                 </div>
               </div>
@@ -394,14 +454,15 @@ export function BusRegistration() {
 
           <div className="mb-md flex flex-wrap gap-gutter">
             {buses.map((bus) => {
-              const hasActive = activeSessionsFor(bus.plate_number).length > 0;
+              const blocking = blockingSessionFor(bus.plate_number);
+              const blockingState = blocking ? sessionState(blocking, now) : null;
               return (
                 <button
                   key={bus.id}
                   onClick={() => onGenerateSession(bus.plate_number)}
-                  disabled={hasActive || sessionBusy === bus.plate_number}
+                  disabled={Boolean(blocking) || sessionBusy === bus.plate_number}
                   className={`flex cursor-pointer items-center gap-2 px-3 py-2 data-mono text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                    hasActive
+                    blocking
                       ? 'bg-surface-dim text-on-surface-variant hairline'
                       : 'border border-on-tertiary-container bg-transparent text-on-tertiary-container hover:bg-on-tertiary-container/10'
                   }`}
@@ -409,8 +470,8 @@ export function BusRegistration() {
                   <span className="material-symbols-outlined text-[16px]">vpn_key</span>
                   {sessionBusy === bus.plate_number
                     ? 'GENERATING…'
-                    : hasActive
-                      ? `${bus.plate_number} · CODE ACTIVE`
+                    : blocking
+                      ? `${bus.plate_number} · ${blockingState === 'ACTIVE' ? 'CODE ACTIVE' : 'DRIVER LINKED'}`
                       : `CREATE CODE · ${bus.plate_number}`}
                 </button>
               );
@@ -424,31 +485,50 @@ export function BusRegistration() {
 
           {sessions.length > 0 ? (
             <div className="flex flex-col gap-gutter">
-              {sessions.map((s) => (
-                <div key={s.id} className="hairline flex items-center justify-between bg-surface p-sm">
-                  <div className="flex items-center gap-md">
-                    <span className={`h-2 w-2 rounded-full ${s.is_active ? 'bg-green-500' : 'bg-outline'}`} />
-                    <div>
-                      <div className="data-mono text-[13px] font-bold tracking-[0.2em] text-on-surface">
-                        {s.session_code}
-                      </div>
-                      <div className="data-mono text-[11px] text-on-surface-variant">
-                        {s.plate_number} · {s.is_active ? 'ACTIVE' : 'REVOKED'} ·{' '}
-                        {new Date(s.created_at).toLocaleString()}
+              {sessions.map((s) => {
+                const state = sessionState(s, now);
+                const remaining = state === 'ACTIVE' ? secondsLeft(s, now) : 0;
+                const dotClass =
+                  state === 'ACTIVE'
+                    ? 'bg-green-500'
+                    : state === 'EXPIRED'
+                      ? 'bg-error'
+                      : 'bg-outline';
+
+                return (
+                  <div
+                    key={s.id}
+                    className="hairline flex items-center justify-between bg-surface p-sm"
+                  >
+                    <div className="flex items-center gap-md">
+                      <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+                      <div>
+                        <div className="data-mono text-[13px] font-bold tracking-[0.2em] text-on-surface">
+                          {s.session_code}
+                        </div>
+                        <div className="data-mono text-[11px] text-on-surface-variant">
+                          {s.plate_number} · {state} ·{' '}
+                          {new Date(s.created_at).toLocaleString()}
+                        </div>
+                        {state === 'ACTIVE' && (
+                          <div className="data-mono text-[10px] text-on-surface-variant">
+                            EXPIRES IN {formatCountdown(remaining)}
+                          </div>
+                        )}
                       </div>
                     </div>
+                    {(state === 'ACTIVE' || state === 'USED') && (
+                      <button
+                        onClick={() => onDeactivateSession(s.id)}
+                        className="flex h-7 cursor-pointer items-center gap-1 px-2 text-[11px] font-bold text-error transition-colors hover:bg-error/10"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">lock</span>
+                        {state === 'USED' ? 'RELEASE' : 'REVOKE'}
+                      </button>
+                    )}
                   </div>
-                  {s.is_active && (
-                    <button
-                      onClick={() => onDeactivateSession(s.id)}
-                      className="flex h-7 cursor-pointer items-center gap-1 px-2 text-[11px] font-bold text-error transition-colors hover:bg-error/10"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">lock</span>
-                      REVOKE
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="data-mono text-[12px] text-on-surface-variant">No sessions yet.</div>

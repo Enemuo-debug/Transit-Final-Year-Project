@@ -37,7 +37,7 @@ pushd "$ROOT/Back-End" >/dev/null
 # SMTP_* / MAIL_FROM forced empty so incident alerts never send real email in tests.
 PORT="$PORT" \
   ANOMALY_EVAL_MS=0 ANOMALY_DEVIATION_METERS=200 ANOMALY_STOP_SECONDS=3 \
-  ANOMALY_STOP_SPEED_KMH=2 ANOMALY_ACCIDENT_DECEL_KMH=30 ANOMALY_ACCIDENT_WINDOW_MS=30000 \
+  ANOMALY_STOP_RADIUS_METERS=50 \
   INCIDENT_COOLDOWN_MS=2000 TELEMETRY_FLUSH_MS=60000 \
   SMTP_HOST= SMTP_USER= SMTP_PASS= MAIL_FROM= \
   node dist/server.js >"$LOG" 2>&1 &
@@ -88,23 +88,22 @@ position 6.5244 3.3792 40
 sleep 1
 check "normal travel raises no incident" "0" "$(curl -s "$BASE/incidents?bus_id=$BUS_ID" -H "$AUTH" | jcount)"
 
-# --- route deviation ---
-position 6.9000 6.0000 50
+# --- route deviation (possible kidnapping / diversion) ---
+position 6.9000 6.0000 0
 sleep 1
 [ "$(count_type ROUTE_DEVIATION)" -ge 1 ] && pass "ROUTE_DEVIATION detected" || fail "ROUTE_DEVIATION not detected"
+DEV_DESC="$(curl -s "$BASE/incidents?bus_id=$BUS_ID&type=ROUTE_DEVIATION" -H "$AUTH" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["description"] if d else "")' 2>/dev/null || echo "")"
+echo "$DEV_DESC" | grep -qi "kidnap\|diversion" && pass "deviation alert mentions kidnapping/diversion" || fail "deviation description [$DEV_DESC]"
 
-# --- accident (sharp deceleration) ---
-position 6.6000 3.4500 60
-position 6.6000 3.4500 5
-sleep 1
-[ "$(count_type ACCIDENT)" -ge 1 ] && pass "ACCIDENT detected" || fail "ACCIDENT not detected"
-
-# --- unanticipated stop (stationary off-stop for > threshold) ---
-position 6.6000 3.5000 0
+# --- no movement for the window, outside a stop -> UNANTICIPATED_STOP ---
+# (midpoint of the corridor, far from the designated Origin stop; speed is ignored)
+position 6.9500 3.6625 0
 sleep 4
-position 6.6000 3.5000 0
+position 6.9500 3.6625 0
 sleep 1
 [ "$(count_type UNANTICIPATED_STOP)" -ge 1 ] && pass "UNANTICIPATED_STOP detected" || fail "UNANTICIPATED_STOP not detected"
+STOP_DESC="$(curl -s "$BASE/incidents?bus_id=$BUS_ID&type=UNANTICIPATED_STOP" -H "$AUTH" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["description"] if d else "")' 2>/dev/null || echo "")"
+echo "$STOP_DESC" | grep -qi "accident\|kidnap\|hold-up" && pass "stop alert mentions accident/hold-up/kidnap" || fail "stop description [$STOP_DESC]"
 
 # --- allowed-track cache populated in Redis ---
 CACHED="$(docker exec "$REDIS_CONT" redis-cli --scan --pattern "transit:route:stops:$RID" | head -1)"
@@ -123,7 +122,7 @@ check "duplicate SOS de-duplicated" "True" "$DEDUP"
 
 # --- company incident API ---
 LIST="$(curl -s "$BASE/incidents" -H "$AUTH" | jcount)"
-[ "$LIST" -ge 4 ] && pass "incident feed lists incidents [$LIST]" || fail "incident feed [$LIST]"
+[ "$LIST" -ge 3 ] && pass "incident feed lists incidents [$LIST]" || fail "incident feed [$LIST]"
 FIRST_ID="$(curl -s "$BASE/incidents?limit=1" -H "$AUTH" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["id"] if d else "NONE")')"
 RESOLVED="$(curl -s -X PATCH "$BASE/incidents/$FIRST_ID/status" -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"status":"RESOLVED"}')"

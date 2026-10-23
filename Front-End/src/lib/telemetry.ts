@@ -6,67 +6,77 @@ export interface TelemetrySample {
   deviceId: string;
   lat: number;
   lng: number;
-  speed: number;
-  heading: number;
+  accuracy: number;
   timestamp: string;
-  actor?: string;
 }
 
 interface StreamEvent {
-  type: 'welcome' | 'position' | 'error';
-  connectionId?: string;
+  type: 'welcome' | 'snapshot' | 'position' | 'position_removed' | 'error';
+  positions?: TelemetrySample[];
+  position?: TelemetrySample;
+  deviceId?: string;
   message?: string;
-  sample?: TelemetrySample;
 }
 
-function wsUrl(): string {
-  const session = getSession();
-  const token = session?.token;
-  return token
-    ? `${WS_BASE}/ws/telemetry?token=${encodeURIComponent(token)}`
-    : `${WS_BASE}/ws/telemetry`;
-}
-
-export function useLivePositions() {
+export function useLivePositions(): {
+  positions: TelemetrySample[];
+  connected: boolean;
+} {
   const [positions, setPositions] = useState<TelemetrySample[]>([]);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    const token = getSession()?.token;
+    if (!token) return;
+    const authToken: string = token;
+
     let disposed = false;
-    let reconnectDelay = 1000;
+    let retry = 1000;
+    let timer: number | null = null;
 
     function connect() {
-      const ws = new WebSocket(wsUrl());
+      const ws = new WebSocket(`${WS_BASE}/ws/telemetry?token=${encodeURIComponent(authToken)}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
         if (disposed) return;
         setConnected(true);
-        reconnectDelay = 1000;
+        retry = 1000;
       };
 
       ws.onmessage = (event) => {
         if (disposed) return;
-        let msg: StreamEvent;
+
+        let message: StreamEvent;
         try {
-          msg = JSON.parse(String(event.data)) as StreamEvent;
+          message = JSON.parse(String(event.data)) as StreamEvent;
         } catch {
           return;
         }
-        if (msg.type === 'position' && msg.sample) {
-          setPositions((prev) => {
-            const next = prev.filter((p) => p.deviceId !== msg.sample!.deviceId);
-            return [...next, msg.sample!];
-          });
+
+        if (message.type === 'snapshot' && message.positions) {
+          setPositions(message.positions);
+        }
+
+        if (message.type === 'position' && message.position) {
+          const incoming = message.position;
+          setPositions((prev) => [
+            ...prev.filter((item) => item.deviceId !== incoming.deviceId),
+            incoming,
+          ]);
+        }
+
+        if (message.type === 'position_removed' && message.deviceId) {
+          setPositions((prev) => prev.filter((item) => item.deviceId !== message.deviceId));
         }
       };
 
       ws.onclose = () => {
         if (disposed) return;
         setConnected(false);
-        setTimeout(connect, reconnectDelay);
-        reconnectDelay = Math.min(reconnectDelay * 2, 15000);
+        timer = window.setTimeout(connect, retry);
+        retry = Math.min(retry * 2, 10000);
       };
 
       ws.onerror = () => {
@@ -78,6 +88,7 @@ export function useLivePositions() {
 
     return () => {
       disposed = true;
+      if (timer !== null) window.clearTimeout(timer);
       wsRef.current?.close();
     };
   }, []);

@@ -84,6 +84,64 @@ export async function routeTrackWkt(routeId: number): Promise<string | null> {
   return rows[0]?.wkt ?? null;
 }
 
+export interface GeoJsonFeatureCollection {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    properties: Record<string, unknown>;
+    geometry: unknown;
+  }>;
+}
+
+/** A 300 m (or configured) buffer around the route line, as GeoJSON. */
+export async function routeCorridorGeoJSON(
+  routeId: number,
+  widthMeters: number,
+): Promise<GeoJsonFeatureCollection | null> {
+  const rows = await sql<{ geojson: string | null }[]>`
+    SELECT ST_AsGeoJSON(
+             ST_Buffer(r.geom::geography, ${widthMeters}::double precision)::geometry
+           ) AS geojson
+    FROM "route" r
+    WHERE r.id = ${routeId} AND r.geom IS NOT NULL
+    LIMIT 1
+  `;
+
+  const raw = rows[0]?.geojson;
+  if (!raw) return null;
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { width_meters: widthMeters },
+        geometry: JSON.parse(raw) as unknown,
+      },
+    ],
+  };
+}
+
+/** Progress along the route line, from 0.0 to 1.0. */
+export async function routeProgress(
+  routeId: number,
+  latitude: number,
+  longitude: number,
+): Promise<number | null> {
+  const rows = await sql<{ progress: number | null }[]>`
+    SELECT ST_LineLocatePoint(
+             r.geom,
+             ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)
+           ) AS progress
+    FROM "route" r
+    WHERE r.id = ${routeId} AND r.geom IS NOT NULL
+    LIMIT 1
+  `;
+
+  const value = rows[0]?.progress;
+  return value === undefined || value === null ? null : Number(value);
+}
+
 /**
  * Distance in metres from a point to the route's allowed corridor (LineString).
  * Returns null when the route has no geometry.

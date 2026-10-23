@@ -8,6 +8,7 @@ router.use(authenticate);
 
 router.get("/", routeController.listRoutes);
 router.post("/", routeController.validateCreateRoute, routeController.createRoute);
+router.get("/:id/corridor", routeController.getRouteCorridor);
 router.get("/:id", routeController.getRouteById);
 router.put("/:id", routeController.validateUpdateRoute, routeController.updateRoute);
 router.delete("/:id", routeController.deleteRoute);

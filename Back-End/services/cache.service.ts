@@ -1,59 +1,29 @@
 import { Redis } from "ioredis";
 
+// Shared cache: generic JSON values plus the latest live GPS position per bus.
+// Every write is mirrored in process memory, so reads keep working if Redis is
+// unavailable. Redis is the shared/fast copy; memory is the fallback.
+
+const DEFAULT_TTL_SECONDS = Number(process.env["CACHE_TTL_SECONDS"] ?? 60);
+const liveTtl = Number(process.env["LIVE_TTL_SECONDS"] ?? 60);
+const LIVE_TTL_SECONDS = Number.isFinite(liveTtl) && liveTtl > 0 ? liveTtl : 60;
+const LIVE_PREFIX = "transit:live:";
+const STREAM_PREFIX = "transit:stream:";
+const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
+
+export function streamKey(deviceId: string): string {
+  return STREAM_PREFIX + deviceId;
+}
+
 export interface LivePosition {
   deviceId: string;
   lat: number;
   lng: number;
-  speed: number;
-  heading: number;
+  accuracy: number;
   timestamp: string;
-  actor?: string;
 }
 
-const LIVE_PREFIX = "transit:live:";
-const DEFAULT_TTL_SECONDS = Number(process.env["LIVE_TTL_SECONDS"] ?? 60);
-
-// ---------------------------------------------------------------------------
-// In-memory mirror: always kept in sync so reads never fail if Redis blips,
-// and so the write-back flusher has a local buffer.
-// ---------------------------------------------------------------------------
-const memory = new Map<string, { value: LivePosition; expiresAt: number }>();
-
-function memorySet(sample: LivePosition, ttlSeconds: number): void {
-  memory.set(sample.deviceId, { value: sample, expiresAt: Date.now() + ttlSeconds * 1000 });
-}
-
-function memoryGet(deviceId: string): LivePosition | null {
-  const entry = memory.get(deviceId);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    memory.delete(deviceId);
-    return null;
-  }
-  return entry.value;
-}
-
-function memoryList(): LivePosition[] {
-  const now = Date.now();
-  const out: LivePosition[] = [];
-  for (const [key, entry] of memory) {
-    if (entry.expiresAt <= now) {
-      memory.delete(key);
-      continue;
-    }
-    out.push(entry.value);
-  }
-  return out;
-}
-
-function memoryDelete(deviceId: string): void {
-  memory.delete(deviceId);
-}
-
-// ---------------------------------------------------------------------------
-// Redis client (optional). If it can't connect, we silently fall back to memory.
-// ---------------------------------------------------------------------------
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
+const memory = new Map<string, { value: string; expiresAt: number }>();
 
 let client: Redis | null = null;
 let redisReady = false;
@@ -87,74 +57,13 @@ export function cacheConnected(): boolean {
   return redisReady;
 }
 
-export function setLive(sample: LivePosition, ttlSeconds = DEFAULT_TTL_SECONDS): void {
-  memorySet(sample, ttlSeconds);
-  if (client && redisReady) {
-    client
-      .set(LIVE_PREFIX + sample.deviceId, JSON.stringify(sample), "EX", ttlSeconds)
-      .catch(() => undefined);
-  }
-}
-
-export async function getLive(deviceId: string): Promise<LivePosition | null> {
-  if (client && redisReady) {
-    try {
-      const raw = await client.get(LIVE_PREFIX + deviceId);
-      if (raw) return JSON.parse(raw) as LivePosition;
-    } catch {
-      // fall through to memory
-    }
-  }
-  return memoryGet(deviceId);
-}
-
-export async function listLive(): Promise<LivePosition[]> {
-  if (client && redisReady) {
-    try {
-      const keys: string[] = [];
-      let cursor = "0";
-      do {
-        const [next, batch] = await client.scan(cursor, "MATCH", `${LIVE_PREFIX}*`, "COUNT", 100);
-        cursor = next;
-        keys.push(...batch);
-      } while (cursor !== "0");
-
-      if (keys.length === 0) return [];
-      const values = await client.mget(keys);
-      const out: LivePosition[] = [];
-      for (const value of values) {
-        if (!value) continue;
-        try {
-          out.push(JSON.parse(value) as LivePosition);
-        } catch {
-          // ignore malformed entry
-        }
-      }
-      return out;
-    } catch {
-      // fall through to memory
-    }
-  }
-  return memoryList();
-}
-
-export async function deleteLive(deviceId: string): Promise<void> {
-  memoryDelete(deviceId);
-  if (client && redisReady) {
-    try {
-      await client.del(LIVE_PREFIX + deviceId);
-    } catch {
-      // ignore
-    }
-  }
-}
-
-// Generic JSON cache (used for the journey "allowed track" / route stop cache).
-const jsonStore = new Map<string, { value: string; expiresAt: number }>();
-
-export async function setJSON<T>(key: string, value: T, ttlSeconds = DEFAULT_TTL_SECONDS): Promise<void> {
+export async function setJSON<T>(
+  key: string,
+  value: T,
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+): Promise<void> {
   const payload = JSON.stringify(value);
-  jsonStore.set(key, { value: payload, expiresAt: Date.now() + ttlSeconds * 1000 });
+  memory.set(key, { value: payload, expiresAt: Date.now() + ttlSeconds * 1000 });
   if (client && redisReady) {
     try {
       await client.set(key, payload, "EX", ttlSeconds);
@@ -173,17 +82,17 @@ export async function getJSON<T>(key: string): Promise<T | null> {
       // fall through to memory
     }
   }
-  const entry = jsonStore.get(key);
+  const entry = memory.get(key);
   if (!entry) return null;
   if (entry.expiresAt <= Date.now()) {
-    jsonStore.delete(key);
+    memory.delete(key);
     return null;
   }
   return JSON.parse(entry.value) as T;
 }
 
 export async function deleteJSON(key: string): Promise<void> {
-  jsonStore.delete(key);
+  memory.delete(key);
   if (client && redisReady) {
     try {
       await client.del(key);
@@ -191,6 +100,50 @@ export async function deleteJSON(key: string): Promise<void> {
       // ignore
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Live GPS positions: latest value per bus, expiring after 60 seconds.
+// Redis is the shared copy; the memory map keeps the app working without it.
+// ---------------------------------------------------------------------------
+
+export async function setLive(position: LivePosition): Promise<void> {
+  await setJSON(LIVE_PREFIX + position.deviceId, position, LIVE_TTL_SECONDS);
+}
+
+export async function getLive(deviceId: string): Promise<LivePosition | null> {
+  return getJSON<LivePosition>(LIVE_PREFIX + deviceId);
+}
+
+export async function deleteLive(deviceId: string): Promise<void> {
+  await deleteJSON(LIVE_PREFIX + deviceId);
+}
+
+export async function listLive(): Promise<LivePosition[]> {
+  const keys = new Set<string>();
+  for (const key of memory.keys()) {
+    if (key.startsWith(LIVE_PREFIX)) keys.add(key);
+  }
+
+  if (client && redisReady) {
+    try {
+      let cursor = "0";
+      do {
+        const [next, batch] = await client.scan(cursor, "MATCH", `${LIVE_PREFIX}*`, "COUNT", 100);
+        cursor = next;
+        for (const key of batch) keys.add(key);
+      } while (cursor !== "0");
+    } catch {
+      // memory keys are already in the set
+    }
+  }
+
+  const positions: LivePosition[] = [];
+  for (const key of keys) {
+    const value = await getJSON<LivePosition>(key);
+    if (value) positions.push(value);
+  }
+  return positions;
 }
 
 export async function redisHealth(): Promise<{ backend: "redis" | "memory"; pingMs: number | null }> {

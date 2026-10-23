@@ -4,22 +4,16 @@ import { httpError } from "../middleware/errorHandler.js";
 import { validateBody, validateQuery, type Schema } from "../middleware/validate.js";
 import type { CompanyAuthUser } from "../middleware/auth.js";
 
-export const startJourneySchema: Schema = {
+export const createJourneySchema: Schema = {
   bus_id: { type: "integer", required: true, min: 1 },
   route_id: { type: "integer", required: true, min: 1 },
-  session_id: { type: "integer", required: false, min: 1 },
-};
-
-export const endJourneySchema: Schema = {
-  status: { type: "string", required: true, oneOf: ["COMPLETED", "CANCELLED"] },
 };
 
 export const listJourneysQuerySchema: Schema = {
   status: { type: "string", required: false, oneOf: JOURNEY_STATUSES as readonly string[] },
 };
 
-export const validateStartJourney = validateBody(startJourneySchema);
-export const validateEndJourney = validateBody(endJourneySchema);
+export const validateCreateJourney = validateBody(createJourneySchema);
 export const validateListJourneys = validateQuery(listJourneysQuerySchema);
 
 function requireCompany(req: Request): CompanyAuthUser {
@@ -60,16 +54,13 @@ export async function createJourney(req: Request, res: Response) {
     company_id: company.id,
     bus_id: req.body.bus_id,
     route_id: req.body.route_id,
-    ...(req.body.session_id !== undefined ? { session_id: req.body.session_id } : {}),
   });
   return res.status(201).json(journey);
 }
 
-export async function endJourney(req: Request, res: Response) {
+export async function completeJourney(req: Request, res: Response) {
   const company = requireCompany(req);
-  const journey = await journeyService.endJourney(company.id, parseJourneyId(req), {
-    status: req.body.status,
-  });
+  const journey = await journeyService.completeJourney(company.id, parseJourneyId(req));
   if (!journey) {
     throw httpError({ error: { code: "JOURNEY_NOT_FOUND", message: "Journey not found." } });
   }

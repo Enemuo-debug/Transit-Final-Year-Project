@@ -110,3 +110,42 @@ export async function sendIncidentAlert(input: IncidentAlertInput): Promise<bool
   if (input.recipients.length === 0) return false;
   return sendMail(buildIncidentAlertEmail(input));
 }
+
+export interface JourneyCompletedInput {
+  recipients: string[];
+  companyName: string;
+  plateNumber: string;
+  routeCode: string | null;
+  routeName: string | null;
+  journeyId: number;
+  completedAt: Date;
+}
+
+export function buildJourneyCompletedEmail(input: JourneyCompletedInput): MailInput {
+  const route = [input.routeCode, input.routeName].filter(Boolean).join(" · ");
+  const lines = [
+    `TRANSIT JOURNEY COMPLETE`,
+    ``,
+    `Company:    ${input.companyName}`,
+    `Vehicle:    ${input.plateNumber}`,
+    `Journey:    #${input.journeyId}`,
+    `Route:      ${route || "—"}`,
+    `Completed:  ${input.completedAt.toISOString()}`,
+    ``,
+    `The bus reached its destination. The journey was completed automatically`,
+    `and the vehicle is now available in the command dashboard.`,
+  ];
+
+  return {
+    to: input.recipients,
+    subject: `[TRANSIT] Journey #${input.journeyId} completed — ${input.plateNumber}`,
+    text: lines.join("\n"),
+  };
+}
+
+export async function sendJourneyCompletedEmail(
+  input: JourneyCompletedInput,
+): Promise<boolean> {
+  if (input.recipients.length === 0) return false;
+  return sendMail(buildJourneyCompletedEmail(input));
+}

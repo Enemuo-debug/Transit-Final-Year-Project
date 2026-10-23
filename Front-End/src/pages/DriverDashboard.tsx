@@ -1,238 +1,209 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import { ThemeToggle } from '../components/ThemeToggle';
 import {
   getSession,
   clearSession,
-  sendPosition,
-  updateDriverStatus,
-  raiseSos,
   getMyJourney,
-  getDriverBus,
   startMyJourney,
-  endMyJourney,
+  sendPosition,
   errorLabel,
-  type DriverJourneyResult,
+  type Journey,
+  type TrackingStatus,
 } from '../lib/api';
 
-const STATUSES = [
-  { key: 'ACTIVE', label: 'AVAILABLE', hint: 'Ready for assignment' },
-  { key: 'OFFLINE', label: 'STANDBY', hint: 'Not in service' },
-  { key: 'MAINTENANCE', label: 'WORKSHOP', hint: 'In workshop' },
-] as const;
-
-type BusStatus = typeof STATUSES[number]['key'];
-
-interface TrackState {
+type LiveFix = {
   lat: number;
   lng: number;
-  speed: number;
-  heading: number;
+  accuracy: number;
   timestamp: string;
-}
+};
 
 export function DriverDashboard() {
   const session = getSession();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<BusStatus>('ACTIVE');
-  const [tracking, setTracking] = useState(false);
+  const [journey, setJourney] = useState<Journey | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [streaming, setStreaming] = useState(false);
+  const [fix, setFix] = useState<LiveFix | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<TrackState | null>(null);
-  const [sending, setSending] = useState(false);
-  const [sosBusy, setSosBusy] = useState(false);
-  const [sosMessage, setSosMessage] = useState<string | null>(null);
-  const [assigned, setAssigned] = useState<DriverJourneyResult | null>(null);
-  const [journeyBusy, setJourneyBusy] = useState(false);
-  const watchRef = useRef<number | null>(null);
-  const lastSendRef = useRef<number>(0);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [lastSent, setLastSent] = useState<string | null>(null);
+  const [tracking, setTracking] = useState<TrackingStatus | null>(null);
+  const watchId = useRef<number | null>(null);
+  const lastSendRef = useRef(0);
   const sendingRef = useRef(false);
 
-  useEffect(() => {
-    return () => {
-      if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
-    };
-  }, []);
+  const user = session?.user as
+    | { plate_number?: string; session_code?: string }
+    | undefined;
+
+  async function loadJourney() {
+    try {
+      const result = await getMyJourney();
+      setJourney(result.journey);
+      setError(null);
+    } catch (err) {
+      const code = err instanceof Error ? err.message : 'REQUEST_FAILED';
+      if (code === 'UNAUTHORIZED' || code === 'SESSION_CODE_REVOKED') {
+        forceLogout('session_invalid');
+        return;
+      }
+      setError(errorLabel(code));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (session?.role !== 'DRIVER') return;
-    let disposed = false;
-    const load = () => {
-      getMyJourney()
-        .then((result) => {
-          if (!disposed) setAssigned(result);
-        })
-        .catch(() => {});
-      getDriverBus()
-        .then((bus) => {
-          if (disposed) return;
-          if (bus.status === 'ACTIVE' || bus.status === 'OFFLINE' || bus.status === 'MAINTENANCE') {
-            setStatus(bus.status);
-          }
-        })
-        .catch(() => {});
-    };
-    load();
-    const id = setInterval(load, 15000);
-    return () => {
-      disposed = true;
-      clearInterval(id);
-    };
+    void loadJourney();
+    const id = setInterval(() => void loadJourney(), 15000);
+    return () => clearInterval(id);
   }, [session?.role]);
+
+  useEffect(() => {
+    return () => stopStreaming();
+  }, []);
+
+  // Streaming is only allowed while the assigned journey is ACTIVE.
+  useEffect(() => {
+    if (streaming && journey?.status !== 'ACTIVE') {
+      stopStreaming();
+      setMessage('Streaming stopped: no active journey.');
+    }
+  }, [journey?.status, streaming]);
 
   if (!session || session.role !== 'DRIVER') {
     return <Navigate to="/signin/driver" replace />;
   }
 
-  const user = session.user as {
-    plate_number?: string;
-    session_code?: string;
-    busId?: number;
-  };
-
-  const assignedJourney = assigned?.journey ?? null;
-  const onJourney =
-    assignedJourney?.status === 'SCHEDULED' || assignedJourney?.status === 'ACTIVE';
-
-  async function pushTrack(sample: TrackState) {
-    if (sendingRef.current) return;
-    sendingRef.current = true;
-    setSending(true);
+  async function onStartJourney() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
     try {
-      await sendPosition({
-        lat: sample.lat,
-        lng: sample.lng,
-        speed: sample.speed,
-        heading: sample.heading,
-      });
-    } catch {
-      // transient, telemetry will retry on next interval
+      const started = await startMyJourney();
+      setJourney(started);
+
+      // Starting the journey should also start the GPS stream.
+      const streamStarted = startStreaming();
+      setMessage(
+        streamStarted
+          ? `Journey ${started.id} started. Streaming started.`
+          : `Journey ${started.id} started. Enable GPS to start streaming.`,
+      );
+    } catch (err) {
+      setError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
     } finally {
-      sendingRef.current = false;
-      setSending(false);
+      setBusy(false);
     }
   }
 
-  function handlePosition(pos: GeolocationPosition) {
-    const now = Date.now();
-    if (now - lastSendRef.current < 3000) return;
-    lastSendRef.current = now;
-    const sample: TrackState = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      speed: pos.coords.speed ?? 0,
-      heading: pos.coords.heading ?? 0,
-      timestamp: new Date().toISOString(),
-    };
-    setLastUpdate(sample);
-    void pushTrack(sample);
+  function stopStreaming() {
+    if (watchId.current !== null) {
+      navigator.geolocation.clearWatch(watchId.current);
+      watchId.current = null;
+    }
+    setStreaming(false);
   }
 
-  function handleGeoError(err: GeolocationPositionError) {
-    setGeoError(
-      err.message || 'Unable to access location. Enable GPS and grant location permission.',
-    );
-    setTracking(false);
-  }
+  function startStreaming(): boolean {
+    if (watchId.current !== null) return false;
 
-  function startTracking() {
     setGeoError(null);
+    setStreamError(null);
+    setTracking(null);
+    setMessage(null);
+
     if (!('geolocation' in navigator)) {
-      setGeoError('This device does not support GPS tracking.');
-      return;
+      setGeoError('This device does not support GPS.');
+      return false;
     }
-    setTracking(true);
-    watchRef.current = navigator.geolocation.watchPosition(
-      handlePosition,
-      handleGeoError,
+
+    setStreaming(true);
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const next: LiveFix = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: new Date().toISOString(),
+        };
+        setFix(next);
+
+        // Send at most one fix every 3 seconds; never overlap requests.
+        const now = Date.now();
+        if (now - lastSendRef.current < 3000 || sendingRef.current) return;
+        lastSendRef.current = now;
+        sendingRef.current = true;
+
+        void sendPosition({
+          lat: next.lat,
+          lng: next.lng,
+          accuracy: next.accuracy,
+        })
+          .then((result) => {
+            setLastSent(new Date().toLocaleTimeString());
+            setStreamError(null);
+            setTracking(result.tracking);
+
+            if (result.journey?.status === 'COMPLETED') {
+              stopStreaming();
+              setJourney(result.journey);
+              setMessage('Destination reached — journey completed automatically.');
+            }
+          })
+          .catch((err) => {
+            const code = err instanceof Error ? err.message : 'REQUEST_FAILED';
+            if (code === 'STREAM_CONFLICT') {
+              forceLogout('stream_conflict');
+              return;
+            }
+            if (code === 'UNAUTHORIZED' || code === 'SESSION_CODE_REVOKED') {
+              forceLogout('session_invalid');
+              return;
+            }
+            if (code === 'NO_ACTIVE_JOURNEY') {
+              stopStreaming();
+              setMessage('Streaming stopped: start an active journey first.');
+            } else {
+              setStreamError(errorLabel(code));
+            }
+          })
+          .finally(() => {
+            sendingRef.current = false;
+          });
+      },
+      (err) => {
+        setGeoError(err.message || 'Could not read the GPS position.');
+        stopStreaming();
+        setMessage('Journey started, but GPS streaming stopped. Enable location and try again.');
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     );
+
+    return true;
   }
 
-  function stopTracking() {
-    if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
-    watchRef.current = null;
-    setTracking(false);
+  function forceLogout(reason: 'stream_conflict' | 'session_invalid') {
+    stopStreaming();
+    clearSession();
+    navigate(`/signin/driver?notice=${reason}`, { replace: true });
   }
 
-  async function onStatusChange(next: BusStatus) {
-    setStatus(next);
-    setApiError(null);
-    try {
-      await updateDriverStatus(next);
-    } catch (err) {
-      setApiError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
-    }
+  function signOut() {
+    stopStreaming();
+    clearSession();
+    navigate('/signin/driver', { replace: true });
   }
 
-  async function currentCoords(): Promise<{ lat: number; lng: number } | null> {
-    if (lastUpdate) return { lat: lastUpdate.lat, lng: lastUpdate.lng };
-    if (!('geolocation' in navigator)) return null;
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 10000 },
-      );
-    });
-  }
-
-  async function onSos() {
-    setSosBusy(true);
-    setSosMessage(null);
-    try {
-      const coords = await currentCoords();
-      if (!coords) {
-        setSosMessage('Could not determine your location. Enable GPS and try again.');
-        return;
-      }
-      const incident = await raiseSos({ latitude: coords.lat, longitude: coords.lng });
-      setSosMessage(
-        incident.deduplicated
-          ? `SOS already active (incident #${incident.id}). Help is being coordinated.`
-          : `SOS transmitted (incident #${incident.id}). Responders are being alerted.`,
-      );
-    } catch (err) {
-      setSosMessage(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
-    } finally {
-      setSosBusy(false);
-    }
-  }
-
-  async function refreshAssigned() {
-    try {
-      setAssigned(await getMyJourney());
-    } catch {
-      // ignore
-    }
-  }
-
-  async function onStartJourney() {
-    if (journeyBusy) return;
-    setJourneyBusy(true);
-    setApiError(null);
-    try {
-      await startMyJourney();
-      await refreshAssigned();
-    } catch (err) {
-      setApiError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
-    } finally {
-      setJourneyBusy(false);
-    }
-  }
-
-  async function onEndJourney() {
-    if (journeyBusy) return;
-    setJourneyBusy(true);
-    setApiError(null);
-    try {
-      await endMyJourney();
-      await refreshAssigned();
-    } catch (err) {
-      setApiError(errorLabel(err instanceof Error ? err.message : 'REQUEST_FAILED'));
-    } finally {
-      setJourneyBusy(false);
-    }
-  }
+  const canStart = journey?.status === 'SCHEDULED';
+  const canStream = journey?.status === 'ACTIVE';
 
   return (
     <div className="grid-bg mask-b min-h-screen bg-background">
@@ -245,206 +216,186 @@ export function DriverDashboard() {
             TRANSIT
           </span>
         </div>
-        <button
-          onClick={() => {
-            clearSession();
-            navigate('/');
-          }}
-          className="label-caps flex items-center gap-2 text-on-surface-variant transition-colors hover:text-error"
-        >
-          <span className="material-symbols-outlined text-[18px]">logout</span>
-          Sign out
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={signOut}
+            className="label-caps flex items-center gap-2 text-on-surface-variant transition-colors hover:text-error"
+          >
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-[512px] flex-col gap-4 px-5 pb-16 pt-8">
-        {/* Linked vehicle */}
         <div className="hairline bg-surface p-4">
           <div className="label-caps text-on-surface-variant">LINKED ASSET</div>
           <div className="mt-1 flex items-end justify-between">
-            <div className="data-mono text-[26px] font-bold tracking-[0.15em] text-on-surface">
-              {user.plate_number ?? '—'}
+            <div className="data-mono text-[24px] font-bold tracking-[0.15em] text-on-surface">
+              {user?.plate_number ?? '—'}
             </div>
-            <div className="data-mono text-[12px] text-on-surface-variant">
-              SESSION {user.session_code ?? '—'}
+            <div className="data-mono text-[11px] text-on-surface-variant">
+              SESSION {user?.session_code ?? '—'}
             </div>
-          </div>
-          <div
-            className={`mt-2 flex items-center gap-2 text-[11px] ${
-              tracking ? 'text-green-500' : 'text-on-surface-variant'
-            }`}
-          >
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${tracking ? 'animate-pulse bg-green-500' : 'bg-outline'}`}
-            />
-            {tracking ? 'LIVE GPS STREAMING' : 'TRACKING OFF'}
           </div>
         </div>
 
-        {/* Assigned journey */}
         <div className="hairline bg-surface p-4">
-          <div className="label-caps text-on-surface-variant">ASSIGNED JOURNEY</div>
-          {assigned?.journey ? (
-            <div className="mt-1">
-              <div className="flex items-end justify-between">
-                <div className="data-mono text-[18px] font-bold text-on-surface">
-                  {assigned.journey.route_code ?? '—'}
-                </div>
-                <span className="label-caps text-green-400">{assigned.journey.status}</span>
+          <div className="flex items-center justify-between">
+            <span className="label-caps text-on-surface-variant">ASSIGNED JOURNEY</span>
+            <span className="data-mono text-[11px] text-on-surface-variant">
+              {journey?.status ?? (loading ? 'LOADING…' : 'NONE')}
+            </span>
+          </div>
+          {journey ? (
+            <div className="mt-2">
+              <div className="data-mono text-[16px] font-bold text-on-surface">
+                {journey.route_code ?? `ROUTE-${journey.route_id}`}
               </div>
               <div className="data-mono text-[11px] text-on-surface-variant">
-                {assigned.journey.route_name ?? ''}
-              </div>
-              <div className="mt-2 flex flex-col gap-1">
-                {assigned.stops.map((s) => (
-                  <div key={s.stop_id} className="data-mono text-[11px] text-on-surface-variant">
-                    {s.stop_order}. {s.name} · {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}
-                  </div>
-                ))}
-                {assigned.stops.length === 0 ? (
-                  <div className="data-mono text-[10px] text-on-surface-variant">No stops defined.</div>
-                ) : null}
-              </div>
-              <div className="mt-3 flex gap-2">
-                {assigned.journey.status === 'SCHEDULED' ? (
-                  <button
-                    onClick={() => void onStartJourney()}
-                    disabled={journeyBusy}
-                    className="label-caps flex w-full items-center justify-center gap-2 bg-on-tertiary-container py-2.5 font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {journeyBusy ? 'Starting…' : 'START JOURNEY'}
-                  </button>
-                ) : null}
-                {assigned.journey.status === 'ACTIVE' ? (
-                  <button
-                    onClick={() => void onEndJourney()}
-                    disabled={journeyBusy}
-                    className="label-caps flex w-full items-center justify-center gap-2 bg-error py-2.5 font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {journeyBusy ? 'Ending…' : 'END JOURNEY'}
-                  </button>
-                ) : null}
+                {journey.route_name ?? ''}
               </div>
             </div>
           ) : (
-            <div className="mt-1 data-mono text-[11px] text-on-surface-variant">
-              No active journey assigned by dispatch.
+            <div className="mt-2 data-mono text-[11px] text-on-surface-variant">
+              No journey assigned by the organization yet.
             </div>
           )}
         </div>
 
-        {/* Status select */}
         <div className="hairline bg-surface p-4">
-          <div className="mb-3 label-caps text-on-surface-variant">VEHICLE STATUS</div>
-          {onJourney ? (
-            <div className="hairline border-on-tertiary-container/50 bg-on-tertiary-container/10 px-3 py-3">
-              <div className="label-caps text-on-tertiary-container">ON JOURNEY</div>
-              <div className="mt-1 data-mono text-[11px] text-on-surface-variant">
-                The assigned journey controls this vehicle's status. End the journey to change it.
-              </div>
+          <div className="mb-3 label-caps text-on-surface-variant">DRIVER ACTIONS</div>
+          {!journey && !loading ? (
+            <div className="hairline bg-surface-dim p-3 data-mono text-[11px] text-on-surface-variant">
+              No journey assigned. Driver actions are disabled until dispatch assigns a journey.
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {STATUSES.map((s) => (
-                <button
-                  key={s.key}
-                  onClick={() => onStatusChange(s.key)}
-                  className={`label-caps flex flex-col gap-1 px-2 py-3 transition-colors ${
-                    status === s.key
-                      ? 'bg-on-tertiary-container text-white'
-                      : 'bg-surface-dim text-on-surface-variant hairline hover:text-on-surface'
-                  }`}
-                >
-                  {s.label}
-                  <span
-                    className={`data-mono text-[10px] ${
-                      status === s.key ? 'text-white/70' : 'text-on-surface-variant'
-                    }`}
-                  >
-                    {s.hint}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          {apiError && (
-            <div className="mt-3 data-mono text-[11px] text-error">{apiError}</div>
-          )}
-        </div>
-
-        {/* Tracking control */}
-        <div className="hairline bg-surface p-4">
-          <div className="mb-3 label-caps text-on-surface-variant">GPS TRACKING</div>
-          <button
-            onClick={tracking ? stopTracking : startTracking}
-            className={`label-caps flex w-full items-center justify-center gap-2 py-3 font-bold transition-opacity ${
-              tracking ? 'bg-error text-white' : 'bg-on-tertiary-container text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">
-              {tracking ? 'gps_fixed' : 'gps_off'}
-            </span>
-            {tracking ? 'STOP STREAMING' : 'START STREAMING'}
-          </button>
-          {geoError && <div className="mt-3 data-mono text-[11px] text-error">{geoError}</div>}
-        </div>
-
-        {/* Emergency SOS */}
-        <div className="hairline border-error bg-error/5 p-4">
-          <div className="mb-3 label-caps text-error">EMERGENCY</div>
-          <button
-            onClick={() => void onSos()}
-            disabled={sosBusy}
-            className="label-caps flex w-full items-center justify-center gap-2 bg-error py-4 text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-[20px]">sos</span>
-            {sosBusy ? 'TRANSMITTING…' : 'SEND SOS'}
-          </button>
-          <div className="mt-2 data-mono text-[10px] text-on-surface-variant">
-            Raises an immediate critical incident at your current position (accident, attack, or
-            kidnapping) — it does not wait for anomaly detection.
-          </div>
-          {sosMessage && <div className="mt-2 data-mono text-[11px] text-error">{sosMessage}</div>}
-        </div>
-
-        {/* Last ping */}
-        <div className="hairline bg-surface p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="label-caps text-on-surface-variant">LAST PING</span>
-            <span
-              className={`data-mono text-[10px] ${sending ? 'text-on-tertiary-container' : 'text-on-surface-variant'}`}
+            <div className="flex flex-col gap-2">
+            <button
+              onClick={() => void onStartJourney()}
+              disabled={!canStart || busy}
+              className="label-caps flex w-full items-center justify-center gap-2 bg-on-tertiary-container py-3 font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {sending ? 'SENDING…' : 'IDLE'}
-            </span>
-          </div>
-          {lastUpdate ? (
-            <div className="grid grid-cols-2 gap-2 data-mono text-[12px] text-on-surface">
-              <div>LAT {lastUpdate.lat.toFixed(6)}</div>
-              <div>LNG {lastUpdate.lng.toFixed(6)}</div>
-              <div>SPEED {lastUpdate.speed.toFixed(1)} km/h</div>
-              <div>HDG {lastUpdate.heading.toFixed(0)}°</div>
-              <div className="col-span-2 text-on-surface-variant">
-                {new Date(lastUpdate.timestamp).toLocaleTimeString()}
+              <span className="material-symbols-outlined text-[18px]">play_arrow</span>
+              {busy
+                ? 'STARTING…'
+                : journey?.status === 'ACTIVE'
+                  ? 'JOURNEY ACTIVE'
+                  : journey?.status === 'COMPLETED'
+                    ? 'JOURNEY COMPLETED'
+                    : 'START JOURNEY'}
+            </button>
+
+            {streaming ? (
+              <div className="hairline flex items-center justify-between bg-surface-dim px-3 py-3">
+                <span className="label-caps flex items-center gap-2 text-green-400">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+                  GPS STREAMING
+                </span>
+                <span className="data-mono text-[10px] text-on-surface-variant">LOCKED</span>
               </div>
-            </div>
-          ) : (
-            <div className="data-mono text-[12px] text-on-surface-variant">
-              No position sent yet. Start streaming to share your location.
+            ) : canStream ? (
+              <button
+                type="button"
+                onClick={startStreaming}
+                className="label-caps flex w-full items-center justify-center gap-2 bg-surface-dim py-3 font-bold text-on-surface-variant transition-colors hover:text-on-surface"
+              >
+                <span className="material-symbols-outlined text-[18px]">sensors</span>
+                RETRY GPS STREAMING
+              </button>
+            ) : null}
+            {!canStream && !streaming ? (
+              <div className="data-mono text-[10px] text-on-surface-variant">
+                Start the journey before streaming telemetry or sending SOS.
+              </div>
+            ) : null}
+
+            <button
+              onClick={() => {
+                setError(null);
+                setMessage('SOS is not implemented yet.');
+              }}
+              disabled={!canStream}
+              className="label-caps flex w-full items-center justify-center gap-2 border border-error bg-error/5 py-3 font-bold text-error transition-colors hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="material-symbols-outlined text-[18px]">sos</span>
+              SEND SOS
+            </button>
             </div>
           )}
-          <div className="mt-3 hairline-b pt-3 data-mono text-[10px] leading-relaxed text-on-surface-variant">
-            Your phone streams GPS to the Transit server. Dispatch sees this bus live on the fleet
-            map under {user.plate_number ?? 'your plate'}.
-          </div>
-        </div>
-      </main>
 
-      <footer className="hairline-t fixed inset-x-0 bottom-0 flex items-center justify-between bg-background/85 px-5 py-2 backdrop-blur-sm">
-        <span className="data-mono text-[10px] text-on-surface-variant">
-          {user.plate_number ?? 'DRIVER'} · {status}
-        </span>
-        <span className="data-mono text-[10px] text-on-surface-variant">TRANSIT DRIVER CONSOLE</span>
-      </footer>
+          {message ? (
+            <div className="mt-3 data-mono text-[11px] text-on-surface-variant">{message}</div>
+          ) : null}
+          {error ? <div className="mt-3 data-mono text-[11px] text-error">{error}</div> : null}
+        </div>
+
+        {journey || streaming ? (
+          <div className="hairline bg-surface p-4">
+            <div className="flex items-center justify-between">
+              <span className="label-caps text-on-surface-variant">LIVE GPS</span>
+            <span
+              className={`data-mono text-[11px] ${
+                streaming ? 'text-green-400' : 'text-on-surface-variant'
+              }`}
+            >
+              {streaming ? 'STREAMING' : 'OFF'}
+            </span>
+          </div>
+
+          {fix ? (
+            <div className="mt-2 grid grid-cols-2 gap-2 data-mono text-[11px] text-on-surface">
+              <span>LAT {fix.lat.toFixed(6)}</span>
+              <span>LNG {fix.lng.toFixed(6)}</span>
+              <span>ACCURACY ±{fix.accuracy.toFixed(0)} m</span>
+              <span>UPDATED {new Date(fix.timestamp).toLocaleTimeString()}</span>
+            </div>
+          ) : (
+            <div className="mt-2 data-mono text-[11px] text-on-surface-variant">
+              No GPS fix yet.
+            </div>
+          )}
+
+          {tracking ? (
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-outline-variant pt-3 data-mono text-[10px]">
+              <span>
+                ROUTE {tracking.distance_m !== null ? `${tracking.distance_m.toFixed(0)} m` : '—'}
+              </span>
+              <span>
+                PROGRESS{' '}
+                {tracking.progress !== null
+                  ? `${(tracking.progress * 100).toFixed(1)}%`
+                  : '—'}
+              </span>
+              <span className={tracking.deviation ? 'text-error' : 'text-green-400'}>
+                {tracking.deviation
+                  ? tracking.just_deviated
+                    ? 'DEVIATION · INCIDENT CREATED'
+                    : 'DEVIATION'
+                  : 'ON ROUTE'}
+              </span>
+              <span>CORRIDOR {tracking.corridor_meters.toFixed(0)} m</span>
+            </div>
+          ) : null}
+
+          {geoError ? (
+            <div className="mt-2 data-mono text-[11px] text-error">{geoError}</div>
+          ) : null}
+
+          <div className="mt-2 data-mono text-[10px] text-on-surface-variant">
+            {lastSent ? `LAST SENT ${lastSent}` : 'NOT SENT YET'}
+          </div>
+          {streamError ? (
+            <div className="mt-1 data-mono text-[11px] text-error">{streamError}</div>
+          ) : null}
+
+            <div className="mt-2 data-mono text-[10px] text-on-surface-variant">
+              Speed is intentionally not captured (study limitation).
+            </div>
+          </div>
+        ) : null}
+      </main>
     </div>
   );
 }

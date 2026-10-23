@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { FeatureCollection } from 'geojson';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { mapsConfigured, mapStyleUrl } from '../lib/maps';
@@ -39,6 +40,7 @@ export interface MapVehicle {
 interface LiveMapProps {
   positions?: TelemetrySample[];
   lines?: MapLine[];
+  corridor?: FeatureCollection | null;
   incidents?: MapIncident[];
   markers?: MapMarker[];
   vehicle?: MapVehicle;
@@ -50,6 +52,7 @@ interface LiveMapProps {
 }
 
 const LINES_SOURCE = 'transit-lines';
+const CORRIDOR_SOURCE = 'transit-corridor';
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: '#ffb4ab',
@@ -61,6 +64,7 @@ const SEVERITY_COLOR: Record<string, string> = {
 export function LiveMap({
   positions = [],
   lines = [],
+  corridor = null,
   incidents = [],
   markers = [],
   vehicle,
@@ -104,6 +108,32 @@ export function LiveMap({
     });
     map.on('error', () => setFailed(true));
     map.on('load', () => {
+      if (!map.getSource(CORRIDOR_SOURCE)) {
+        map.addSource(CORRIDOR_SOURCE, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+        map.addLayer({
+          id: 'transit-corridor-fill',
+          type: 'fill',
+          source: CORRIDOR_SOURCE,
+          paint: {
+            'fill-color': '#1a73e8',
+            'fill-opacity': 0.12,
+          },
+        });
+        map.addLayer({
+          id: 'transit-corridor-outline',
+          type: 'line',
+          source: CORRIDOR_SOURCE,
+          paint: {
+            'line-color': '#1a73e8',
+            'line-width': 1.5,
+            'line-opacity': 0.6,
+          },
+        });
+      }
+
       if (!map.getSource(LINES_SOURCE)) {
         map.addSource(LINES_SOURCE, {
           type: 'geojson',
@@ -255,6 +285,14 @@ export function LiveMap({
       .addTo(map);
     vehicleMarkerRef.current = marker;
   }, [vehicle?.lat, vehicle?.lng, vehicle?.heading, configured]);
+
+  // Corridor polygon (buffer around the route line)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const source = map.getSource(CORRIDOR_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    source?.setData(corridor ?? { type: 'FeatureCollection', features: [] });
+  }, [corridor, ready]);
 
   // Route corridor lines
   useEffect(() => {
